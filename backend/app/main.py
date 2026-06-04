@@ -8,6 +8,7 @@ import app.models  # noqa: F401 — registers models with Base before create_all
 from app.api import auth, bets, fixtures, j_tracker, performance, predictions
 from app.config import settings
 from app.database import Base, engine
+from app.rate_limit import InMemoryRateLimitMiddleware
 from app.scheduler.jobs import job_settle_matches, job_sync_fixtures
 
 scheduler = AsyncIOScheduler()
@@ -42,6 +43,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="AI Football Predictor API", lifespan=lifespan)
+
+app.add_middleware(InMemoryRateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

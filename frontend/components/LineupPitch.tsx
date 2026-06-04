@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { getLineupDetails, type LineupDetails, type LineupPlayer, type TeamLineup } from "@/lib/api";
 
 type Row = { row: number; players: (LineupPlayer & { col: number })[] };
@@ -43,66 +43,69 @@ function buildRowsFromPos(players: LineupPlayer[]): Row[] | null {
   return rows.length ? rows : null;
 }
 
-function PitchSVG() {
+function PitchLines() {
   return (
-    <svg viewBox="0 0 200 300" className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-      <rect x="2" y="2" width="196" height="296" fill="none" stroke="#0f172a" strokeWidth="1.2" />
-      <line x1="2" y1="150" x2="198" y2="150" stroke="#0f172a" strokeWidth="1" />
-      <circle cx="100" cy="150" r="20" fill="none" stroke="#0f172a" strokeWidth="1" />
-      <circle cx="100" cy="150" r="1.5" fill="#0f172a" />
-      {/* top box */}
-      <rect x="50" y="2" width="100" height="36" fill="none" stroke="#0f172a" strokeWidth="1" />
-      <rect x="75" y="2" width="50" height="14" fill="none" stroke="#0f172a" strokeWidth="1" />
-      {/* bottom box */}
-      <rect x="50" y="262" width="100" height="36" fill="none" stroke="#0f172a" strokeWidth="1" />
-      <rect x="75" y="284" width="50" height="14" fill="none" stroke="#0f172a" strokeWidth="1" />
-    </svg>
+    <>
+      <div className="absolute left-[10%] right-[10%] top-1/2 h-px bg-[var(--term-border-2)]" />
+      <div className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--term-border-2)]" />
+      <div className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--term-border-2)]" />
+      <div className="absolute left-1/2 top-0 h-[13%] w-[34%] -translate-x-1/2 border-x border-b border-[var(--term-border-2)]" />
+      <div className="absolute left-1/2 top-0 h-[6%] w-[18%] -translate-x-1/2 border-x border-b border-[var(--term-border-2)]" />
+      <div className="absolute bottom-0 left-1/2 h-[13%] w-[34%] -translate-x-1/2 border-x border-t border-[var(--term-border-2)]" />
+      <div className="absolute bottom-0 left-1/2 h-[6%] w-[18%] -translate-x-1/2 border-x border-t border-[var(--term-border-2)]" />
+    </>
   );
 }
 
 function PlayerDot({ player }: { player: LineupPlayer }) {
   return (
-    <div className="flex flex-col items-center" style={{ width: "20%" }}>
-      <div className="w-8 h-8 rounded-full bg-white border-2 border-slate-900 flex items-center justify-center text-[11px] font-bold text-slate-900">
-        {player.number ?? ""}
-      </div>
-      <div className="mt-1 max-w-[80px] text-[10px] leading-tight text-center text-slate-800 truncate">
-        {player.name}
-      </div>
+    <div className="flex flex-col items-center" style={{ width: "20%" }} title={player.name}>
+      <div className="h-[11px] w-[11px] rounded-full bg-[var(--lineup-accent)] opacity-90 shadow-[0_0_8px_-2px_var(--lineup-accent)]" />
     </div>
   );
 }
 
-function Pitch({ lineup }: { lineup: TeamLineup }) {
+function PlaceholderDot() {
+  return (
+    <div className="flex flex-col items-center" style={{ width: "20%" }}>
+      <div className="h-[11px] w-[11px] rounded-full bg-[var(--lineup-accent)] opacity-90 shadow-[0_0_8px_-2px_var(--lineup-accent)]" />
+    </div>
+  );
+}
+
+function PitchSurface({ rows, muted = false }: { rows: Row[] | null; muted?: boolean }) {
+  return (
+    <div className="relative aspect-[1.05] overflow-hidden border border-[var(--term-border)] bg-[repeating-linear-gradient(0deg,#0d1410_0_12.5%,#0f1712_12.5%_25%)] py-2.5">
+      <PitchLines />
+      {rows && rows.length > 0 ? (
+        <div className={`absolute inset-0 flex flex-col-reverse justify-around py-2 ${muted ? "opacity-90" : ""}`}>
+          {rows.map((r) => (
+            <div key={r.row} className="flex items-center justify-around">
+              {r.players.map((p, i) => (
+                p.name ? <PlayerDot key={`${p.name}-${i}`} player={p} /> : <PlaceholderDot key={i} />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Pitch({ lineup, accent }: { lineup: TeamLineup; accent: string }) {
   const rows = buildRowsFromGrid(lineup.players) ?? buildRowsFromPos(lineup.players);
 
   return (
-    <div className="rounded-xl border border-wc-border overflow-hidden bg-white">
-      <div className="px-3 py-2 border-b border-wc-border flex items-center justify-between">
-        <span className="text-sm font-semibold text-wc-ink truncate">{lineup.team}</span>
-        <span className="text-xs text-wc-muted">{lineup.formation || "—"}</span>
+    <div className="border border-[var(--term-border)] bg-[var(--term-surface-2)] p-3" style={{ "--lineup-accent": accent } as CSSProperties}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="truncate font-mono text-sm font-semibold text-[var(--term-text)]">{lineup.team}</span>
+        <span className="border border-[var(--term-border-2)] bg-[var(--term-surface)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--term-muted)]">{lineup.formation || "--"}</span>
       </div>
-      <div className="relative aspect-[2/3] bg-white">
-        <PitchSVG />
-        {rows && rows.length > 0 ? (
-          <div className="absolute inset-0 flex flex-col-reverse justify-between py-3 px-2 gap-1">
-            {rows.map((r) => (
-              <div key={r.row} className="flex justify-around items-center">
-                {r.players.map((p, i) => (
-                  <PlayerDot key={`${p.name}-${i}`} player={p} />
-                ))}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <PitchSurface rows={rows} />
     </div>
   );
 }
 
-// 4-3-3 placeholder used purely for the visual layout when real lineup data
-// is not yet available. These player objects must never reach the AI prompt
-// (the backend already filters them out — see _lineup_str / analyze_lineups).
 const PLACEHOLDER_ROWS: Row[] = [
   { row: 1, players: [{ name: "", number: null, pos: "G", grid: null, col: 1 }] },
   { row: 2, players: Array.from({ length: 4 }, (_, i) => ({ name: "", number: null, pos: "D", grid: null, col: i + 1 })) },
@@ -110,28 +113,14 @@ const PLACEHOLDER_ROWS: Row[] = [
   { row: 4, players: Array.from({ length: 3 }, (_, i) => ({ name: "", number: null, pos: "F", grid: null, col: i + 1 })) },
 ];
 
-function PlaceholderPitch({ teamName }: { teamName: string }) {
+function PlaceholderPitch({ teamName, accent }: { teamName: string; accent: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-wc-border overflow-hidden bg-white">
-      <div className="px-3 py-2 border-b border-wc-border flex items-center justify-between">
-        <span className="text-sm font-semibold text-wc-ink truncate">{teamName}</span>
-        <span className="text-xs text-wc-muted">4-3-3 · placeholder</span>
+    <div className="border border-[var(--term-border)] bg-[var(--term-surface-2)] p-3" style={{ "--lineup-accent": accent } as CSSProperties}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="truncate font-mono text-sm font-semibold text-[var(--term-text)]">{teamName}</span>
+        <span className="border border-[var(--term-border-2)] bg-[var(--term-surface)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--term-muted)]">4-3-3</span>
       </div>
-      <div className="relative aspect-[2/3] bg-white">
-        <PitchSVG />
-        <div className="absolute inset-0 flex flex-col-reverse justify-between py-3 px-2 gap-1 opacity-50">
-          {PLACEHOLDER_ROWS.map((r) => (
-            <div key={r.row} className="flex justify-around items-center">
-              {r.players.map((_, i) => (
-                <div key={i} className="flex flex-col items-center" style={{ width: "20%" }}>
-                  <div className="w-8 h-8 rounded-full bg-white border-2 border-dashed border-slate-400" />
-                  <div className="mt-1 text-[10px] text-slate-400">—</div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      <PitchSurface rows={PLACEHOLDER_ROWS} muted />
     </div>
   );
 }
@@ -166,7 +155,6 @@ export default function LineupsSection({
       if (cancelled) return;
       setData(d);
       setLoaded(true);
-      // Once both sides are real, stop polling.
       if (hasValidPlayers(d?.home ?? null) && hasValidPlayers(d?.away ?? null)) {
         timeouts.forEach(clearTimeout);
       }
@@ -194,20 +182,23 @@ export default function LineupsSection({
   const anyMissing = !home || !away;
 
   return (
-    <section className="mt-10">
-      <h2 className="text-lg font-semibold text-wc-ink mb-3">Starting Lineups</h2>
+    <section className="mt-10 border border-[var(--term-border)] bg-[var(--term-surface)] p-[18px]">
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--accent)]">STARTING LINEUPS</span>
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-dim)]">// XI UNCONFIRMED / PROJECTED FORMATION</span>
+      </div>
       {!loaded ? (
-        <div className="text-sm text-wc-muted">Loading lineups…</div>
+        <div className="font-mono text-sm text-[var(--term-muted)]">Loading lineups...</div>
       ) : (
         <>
           {anyMissing && (
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Starting XI is not available yet. Showing placeholder formation only.
+            <div className="mb-3 border border-[rgba(255,180,84,.35)] bg-[rgba(255,180,84,.07)] px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-[var(--term-amber)]">
+              // Starting XI unavailable / showing placeholder formation
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {home ? <Pitch lineup={home} /> : <PlaceholderPitch teamName={homeTeam} />}
-            {away ? <Pitch lineup={away} /> : <PlaceholderPitch teamName={awayTeam} />}
+          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+            {home ? <Pitch lineup={home} accent="var(--term-pos)" /> : <PlaceholderPitch teamName={homeTeam} accent="var(--term-pos)" />}
+            {away ? <Pitch lineup={away} accent="var(--term-neg)" /> : <PlaceholderPitch teamName={awayTeam} accent="var(--term-neg)" />}
           </div>
         </>
       )}

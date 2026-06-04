@@ -1,7 +1,12 @@
 from datetime import datetime
+import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_-]{3,24}$")
+_PRINTABLE_ASCII_RE = re.compile(r"^[ -~]+$")
 
 
 class FixtureOut(BaseModel):
@@ -70,6 +75,23 @@ class AuthInput(BaseModel):
     username: str
     password: str
 
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        username = value.strip()
+        if not _USERNAME_RE.fullmatch(username):
+            raise ValueError("Username must be 3-24 characters using only letters, numbers, underscores, or hyphens")
+        return username
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if len(value) < 1 or len(value) > 72:
+            raise ValueError("Password must be 1-72 characters")
+        if value != value.strip() or not _PRINTABLE_ASCII_RE.fullmatch(value):
+            raise ValueError("Password can only use normal keyboard characters, with no leading or trailing spaces")
+        return value
+
 
 class UserOut(BaseModel):
     model_config = {"from_attributes": True}
@@ -117,6 +139,7 @@ class LeaderboardEntry(BaseModel):
     win_rate: float
     roi: float
     total_profit_loss: float
+    recent_form: list[str] = []   # last up to 5 settled results, chronological: "W" | "L"
 
 
 class CompareEntry(BaseModel):

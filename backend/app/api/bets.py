@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -146,8 +147,27 @@ async def place_bet(
     return bet
 
 
+def _recent_form(settled, n: int = 5) -> list[str]:
+    """Last up to n settled results, chronological (oldest → newest), as 'W'/'L'."""
+    dated = [r for r in settled if r.settled_at is not None]
+    dated.sort(key=lambda r: r.settled_at, reverse=True)
+    recent = list(reversed(dated[:n]))
+    return ["W" if r.status == "won" else "L" for r in recent]
+
+
+# Short in-process cache so frequent polling (many tabs) doesn't recompute the
+# whole board on every request. Stale-by-at-most TTL seconds is fine for a board
+# that only changes on settlement (~10 min) or a new bet.
+_LB_CACHE: dict = {"at": 0.0, "data": None}
+_LB_TTL = 45.0
+
+
 @router.get("/leaderboard", response_model=list[LeaderboardEntry])
 def leaderboard(db: Session = Depends(get_db)):
+    now = time.monotonic()
+    if _LB_CACHE["data"] is not None and now - _LB_CACHE["at"] < _LB_TTL:
+        return _LB_CACHE["data"]
+
     entries: list[LeaderboardEntry] = []
 
     # AI models
@@ -171,6 +191,7 @@ def leaderboard(db: Session = Depends(get_db)):
             win_rate=round(won / len(settled), 3) if settled else 0.0,
             roi=round(total_pl / total_staked, 3) if total_staked else 0.0,
             total_profit_loss=round(total_pl, 2),
+            recent_form=_recent_form(settled),
         ))
 
     # Users
@@ -194,8 +215,11 @@ def leaderboard(db: Session = Depends(get_db)):
             win_rate=round(won / len(settled), 3) if settled else 0.0,
             roi=round(total_pl / total_staked, 3) if total_staked else 0.0,
             total_profit_loss=round(total_pl, 2),
+            recent_form=_recent_form(settled),
         ))
 
+    _LB_CACHE["data"] = entries
+    _LB_CACHE["at"] = now
     return entries
 
 

@@ -132,7 +132,7 @@ User ────< UserBet >───── Fixture ─────< Prediction
 
 | Job | Cadence | What it does |
 |---|---|---|
-| `job_sync_fixtures` | Weekly, Mon 06:00 | Calls `fetch_upcoming_fixtures()` and inserts any new fixtures over the next 7 days. |
+| `job_sync_fixtures` | Weekly, Mon 06:00 | Calls `fetch_upcoming_fixtures()` and inserts any new fixtures over the next 14 days. |
 | `job_settle_matches` | Every 10 minutes | For every fixture with `status="scheduled"` and `kickoff_at < now`, fetches the result and settles every pending `Prediction` and `UserBet` for that fixture. |
 
 The scheduler runs **inside the FastAPI process**. If you scale to multiple workers, you'll need to gate this with a leader election or move it out.

@@ -23,25 +23,37 @@ export default function RouteLoading() {
   }, []);
 
   return (
-    <div className="relative min-h-[70vh] flex items-center justify-center font-mono select-none">
-      <span className="absolute top-0 left-0 text-wc-muted text-3xl">/</span>
-      <span className="absolute top-0 right-0 text-wc-muted text-3xl">&gt;</span>
-      <span className="absolute bottom-0 left-0 text-wc-muted text-3xl">&copy;</span>
-      <span className="absolute bottom-0 right-0 text-wc-muted text-3xl">]</span>
-
-      <div className="text-center">
-        <div className="text-7xl sm:text-8xl font-bold text-wc-gold tabular-nums tracking-tight">
-          {String(pct).padStart(2, "0")}
-          <span className="text-wc-muted">%</span>
+    <div className="grid min-h-[70vh] place-items-center px-6 py-12 font-mono select-none">
+      <div className="w-full max-w-[560px] border border-[var(--term-border)] bg-[var(--term-surface)] p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[10.5px] uppercase tracking-[0.14em] text-[var(--accent)]">SYSTEM SYNC</span>
+          <span className="text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-dim)]">ROUTE / LOADING</span>
         </div>
-        <div className="mt-6 h-px w-48 mx-auto bg-wc-border overflow-hidden">
+
+        <div className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--term-muted)]">
+          <span className="h-[7px] w-[7px] rounded-full bg-[var(--term-cyan)] shadow-[0_0_10px_var(--term-cyan)]" />
+          Fetching interface state...
+        </div>
+
+        <div className="h-1.5 border border-[var(--term-border)] bg-[var(--term-surface-2)]">
           <div
-            className="h-full bg-wc-gold transition-[width] duration-100 ease-out"
+            className="h-full bg-[var(--accent)] transition-[width] duration-100 ease-out"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <div className="mt-4 text-xs uppercase tracking-[0.4em] text-wc-muted animate-pulse">
-          Loading
+
+        <div className="mt-4 grid gap-2">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="grid grid-cols-[42px_1fr_68px] items-center gap-3">
+              <span className="h-2 bg-[var(--term-border-2)]" />
+              <span className="h-2 bg-[var(--term-surface-2)]" />
+              <span className="h-2 bg-[var(--term-border-2)]" />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 text-[10px] uppercase tracking-[0.14em] text-[var(--term-dim)]">
+          // Hydrating page modules / {pct}% complete
         </div>
       </div>
     </div>

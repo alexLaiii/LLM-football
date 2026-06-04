@@ -3,6 +3,7 @@ import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+# This page generalize the user_message creation and differentiate between world cup matches and non world cup matches.
 _WC_RULES = """
 World Cup 2026-specific rules:
 - Treat international-team form carefully. Competitive qualifiers and major tournament matches should carry more weight than friendlies.

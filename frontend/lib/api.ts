@@ -1,5 +1,47 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export class ApiError extends Error {
+  status: number;
+  retryAfter: number | null;
+
+  constructor(message: string, status: number, retryAfter: number | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+
+async function throwApiError(res: Response, fallback: string): Promise<never> {
+  const retryAfterValue = Number(res.headers.get("Retry-After"));
+  const retryAfter = Number.isFinite(retryAfterValue) && retryAfterValue > 0 ? retryAfterValue : null;
+  let message = fallback;
+  const body = await res.text();
+
+  if (body.trim()) {
+    try {
+      const data = JSON.parse(body);
+      if (typeof data?.detail === "string" && data.detail.trim()) {
+        message = data.detail;
+      } else if (Array.isArray(data?.detail) && typeof data.detail[0]?.msg === "string") {
+        message = data.detail[0].msg.replace(/^Value error,\s*/i, "");
+      } else {
+        message = body;
+      }
+    } catch {
+      message = body;
+    }
+  }
+
+  if (res.status === 429) {
+    message = retryAfter
+      ? `Too many requests. Please wait ${retryAfter} seconds before trying again.`
+      : "Too many requests. Please wait a moment before trying again.";
+  }
+
+  throw new ApiError(message, res.status, retryAfter);
+}
+
 function authHeaders(token: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -114,13 +156,13 @@ export async function getLineupDetails(fixtureId: number): Promise<LineupDetails
 
 export async function syncFixtures(): Promise<Fixture[]> {
   const res = await fetch(`${API_URL}/fixtures/sync`, { method: "POST" });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) await throwApiError(res, "Fixture sync failed");
   return res.json();
 }
 
 export async function requestPredictions(fixtureId: number): Promise<Prediction[]> {
   const res = await fetch(`${API_URL}/predictions/request/${fixtureId}`, { method: "POST" });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) await throwApiError(res, "Prediction request failed");
   return res.json();
 }
 
@@ -162,7 +204,7 @@ export async function getJTracker(): Promise<JTrackerData | null> {
 
 export async function resetJStreak(user: string): Promise<{ grok_response: string }> {
   const res = await fetch(`${API_URL}/j-tracker/${user}/reset`, { method: "POST" });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) await throwApiError(res, "Reset failed");
   return res.json();
 }
 
@@ -177,7 +219,7 @@ export async function registerUser(username: string, password: string): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
-  if (!res.ok) throw new Error((await res.json()).detail ?? "Registration failed");
+  if (!res.ok) await throwApiError(res, "Registration failed");
   return res.json();
 }
 
@@ -187,7 +229,7 @@ export async function loginUser(username: string, password: string): Promise<Aut
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
-  if (!res.ok) throw new Error((await res.json()).detail ?? "Login failed");
+  if (!res.ok) await throwApiError(res, "Login failed");
   return res.json();
 }
 
@@ -227,6 +269,7 @@ export type LeaderboardEntry = {
   win_rate: number;
   roi: number;
   total_profit_loss: number;
+  recent_form?: string[];   // last up to 5 settled results, chronological: "W" | "L"
 };
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
@@ -285,7 +328,7 @@ export async function placeUserBet(
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
     body: JSON.stringify({ bet_on, stake }),
   });
-  if (!res.ok) throw new Error((await res.json()).detail ?? "Bet failed");
+  if (!res.ok) await throwApiError(res, "Bet failed");
   return res.json();
 }
 
@@ -320,4 +363,3 @@ export async function getCompare(token: string): Promise<CompareData | null> {
     return res.json();
   } catch { return null; }
 }
-

@@ -1,115 +1,141 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { Prediction } from "@/lib/api";
-
-const MODEL_COLORS: Record<string, string> = {
-  claude:   "border-violet-200 bg-violet-50",
-  gpt5:     "border-emerald-200 bg-emerald-50",
-  gemini:   "border-blue-200 bg-blue-50",
-  grok:     "border-orange-200 bg-orange-50",
-  deepseek: "border-cyan-200 bg-cyan-50",
-};
+import ModelIcon from "@/components/ModelIcon";
 
 const MODEL_LABELS: Record<string, string> = {
-  claude:   "Claude",
-  gpt5:     "ChatGPT",
-  gemini:   "Gemini",
-  grok:     "Grok",
+  claude: "Claude",
+  gpt5: "ChatGPT",
+  gemini: "Gemini",
+  grok: "Grok",
   deepseek: "DeepSeek",
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-white text-wc-muted border border-wc-border",
-  won:     "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  lost:    "bg-red-50 text-red-700 border border-red-200",
-  void:    "bg-white text-wc-muted border border-wc-border",
+const MODEL_ACCENTS: Record<string, string> = {
+  claude: "#4169a1",
+  gpt5: "#2f8b57",
+  gemini: "#7a4ba0",
+  grok: "#b73d38",
+  deepseek: "#7bb7d8",
 };
 
-function ProbBar({ label, value, active, valueScore }: { label: string; value: number; active: boolean; valueScore?: number | null }) {
+const pickLabel: Record<string, string> = { home: "HOME", draw: "DRAW", away: "AWAY" };
+
+function money(value: number) {
+  return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toFixed(2)}`;
+}
+
+function statusBadge(prediction: Prediction) {
+  if (prediction.status === "won") return { label: `WON ${money(prediction.profit_loss ?? 0)}`, cls: "border-[rgba(56,209,124,.45)] bg-[rgba(56,209,124,.08)] text-[var(--term-pos)]" };
+  if (prediction.status === "lost") return { label: `LOST ${money(prediction.profit_loss ?? 0)}`, cls: "border-[rgba(255,89,112,.45)] bg-[rgba(255,89,112,.08)] text-[var(--term-neg)]" };
+  if (prediction.status === "void") return { label: "VOID", cls: "border-[var(--term-border-2)] text-[var(--term-dim)]" };
+  return { label: "PENDING", cls: "border-[rgba(255,180,84,.38)] text-[var(--term-amber)]" };
+}
+
+function ProbRow({
+  label,
+  pct,
+  value,
+  color,
+  shimmer,
+}: {
+  label: string;
+  pct: number;
+  value: number | null;
+  color: string;
+  shimmer?: boolean;
+}) {
+  const whole = Math.round(pct * 100);
   return (
-    <div className="flex items-center gap-2">
-      <span className={`w-12 text-xs ${active ? "text-wc-ink font-semibold" : "text-wc-muted"}`}>
-        {label}
-      </span>
-      <div className="flex-1 bg-wc-border rounded-full h-2">
-        <div
-          className={`h-2 rounded-full transition-all ${active ? "bg-wc-red" : "bg-slate-300"}`}
-          style={{ width: `${(value * 100).toFixed(0)}%` }}
+    <div className="grid grid-cols-[44px_1fr_42px_44px] items-center gap-2.5">
+      <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">{label}</span>
+      <span className="relative h-[6px] overflow-hidden border border-[var(--term-border)] bg-[var(--term-surface-2)]">
+        <i
+          className={`absolute inset-y-0 left-0 block transition-[width] duration-700 ${shimmer ? "after:absolute after:inset-0 after:translate-x-[-100%] after:bg-gradient-to-r after:from-transparent after:via-white/30 after:to-transparent after:content-[''] after:animate-[terminal-progress_2.6s_ease-in-out_infinite]" : ""}`}
+          style={{ width: `${whole}%`, background: color }}
+          aria-hidden="true"
         />
-      </div>
-      <span className={`w-10 text-right text-xs ${active ? "text-wc-ink" : "text-wc-muted"}`}>
-        {(value * 100).toFixed(0)}%
       </span>
-      {valueScore != null && (
-        <span className={`w-10 text-right text-xs ${valueScore >= 1 ? "text-emerald-600" : "text-red-600"}`}>
-          {valueScore.toFixed(2)}x
-        </span>
-      )}
+      <span className="text-right font-mono text-xs tabular-nums text-[var(--term-text)]">{whole}%</span>
+      <span className={`text-right font-mono text-[11px] tabular-nums ${value !== null && value >= 1 ? "text-[var(--term-pos)]" : "text-[var(--term-dim)]"}`}>
+        {value === null ? "--" : `${value.toFixed(2)}x`}
+      </span>
+    </div>
+  );
+}
+
+function Cell({ label, value, color, border }: { label: string; value: string; color?: string; border?: boolean }) {
+  return (
+    <div className={`p-[11px_14px] ${border ? "border-l border-[var(--term-border)]" : ""}`}>
+      <div className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">{label}</div>
+      <div className="font-mono text-sm font-semibold tabular-nums" style={{ color: color ?? "var(--term-text)" }}>{value}</div>
     </div>
   );
 }
 
 export default function PredictionCard({ prediction }: { prediction: Prediction }) {
   const [expanded, setExpanded] = useState(false);
-  const colorClass = MODEL_COLORS[prediction.model_name] ?? "border-wc-border bg-white";
   const label = MODEL_LABELS[prediction.model_name] ?? prediction.model_name;
-
-  const homeProb = prediction.home_prob;
-  const drawProb = prediction.draw_prob;
-  const awayProb = prediction.away_prob;
+  const accent = MODEL_ACCENTS[prediction.model_name] ?? "var(--term-cyan)";
+  const badge = statusBadge(prediction);
+  const pick = pickLabel[prediction.bet_on] ?? prediction.bet_on.toUpperCase();
 
   return (
-    <div className={`rounded-xl border p-4 shadow-card ${colorClass}`}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="font-bold text-wc-ink">{label}</div>
-          <div className="text-xs text-wc-muted mt-0.5">
-            Betting <span className="text-wc-ink font-medium capitalize">{prediction.bet_on}</span>
-            {" @ "}<span className="text-wc-gold font-medium">{prediction.odds.toFixed(2)}</span>
-          </div>
-        </div>
-        <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_BADGE[prediction.status]}`}>
-          {prediction.status === "won"     && `+$${prediction.profit_loss?.toFixed(2)}`}
-          {prediction.status === "lost"    && `-$${Math.abs(prediction.profit_loss ?? 0).toFixed(2)}`}
-          {prediction.status === "pending" && "Pending"}
-          {prediction.status === "void"    && "Void"}
-        </span>
-      </div>
-
-      <div className="space-y-1.5 mb-3">
-        <ProbBar label="Home" value={homeProb} active={prediction.bet_on === "home"} valueScore={prediction.home_value_score} />
-        <ProbBar label="Draw" value={drawProb} active={prediction.bet_on === "draw"} valueScore={prediction.draw_value_score} />
-        <ProbBar label="Away" value={awayProb} active={prediction.bet_on === "away"} valueScore={prediction.away_value_score} />
-      </div>
-
-      <div className="flex gap-4 text-xs text-wc-muted mb-3">
-        <div>
-          Confidence <span className="text-wc-ink">{(prediction.confidence * 100).toFixed(0)}%</span>
-        </div>
-        <div>
-          EV <span className={prediction.expected_value >= 0 ? "text-emerald-600" : "text-red-600"}>
-            {prediction.expected_value >= 0 ? "+" : ""}{prediction.expected_value.toFixed(3)}
+    <article
+      className="flex flex-col border border-[var(--term-border)] bg-[var(--term-surface)]"
+      style={{ "--model-accent": accent, boxShadow: `0 0 22px -16px ${accent}` } as CSSProperties}
+    >
+      <div className="border-b border-t-2 border-b-[var(--term-border)] p-[14px_16px]" style={{ borderTopColor: accent }}>
+        <div className="flex items-center gap-2.5">
+          <span
+            className="grid h-[26px] w-[26px] place-items-center overflow-hidden border bg-[var(--term-surface-2)] p-1"
+            style={{ borderColor: accent, color: accent, background: `color-mix(in oklab, ${accent} 18%, var(--term-surface-2))` }}
+          >
+            <ModelIcon model={prediction.model_name} label={label} className="h-full w-full object-contain" />
+          </span>
+          <span className="font-mono text-sm font-semibold text-[var(--term-text)]">{label}</span>
+          <span className={`ml-auto inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] ${badge.cls}`}>
+            {prediction.status === "pending" && <i className="h-[6px] w-[6px] rounded-full bg-[var(--term-cyan)]" />}
+            {badge.label}
           </span>
         </div>
-        <div>
-          Stake <span className="text-wc-gold">${prediction.stake.toFixed(2)}</span>
+        <div className="mt-2.5 flex items-center gap-2">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-dim)]">BETTING</span>
+          <span className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${prediction.bet_on === "draw" ? "border-[rgba(255,180,84,.42)] text-[var(--term-amber)]" : "border-[rgba(56,209,124,.42)] text-[var(--term-pos)]"}`}>
+            {pick}
+          </span>
+          <span className="font-mono text-xs tabular-nums text-[var(--term-text)]">@ {prediction.odds.toFixed(2)}</span>
         </div>
+      </div>
+
+      <div className="grid gap-2 p-[14px_16px]">
+        <ProbRow label="HOME" pct={prediction.home_prob} value={prediction.home_value_score} color="var(--term-pos)" shimmer />
+        <ProbRow label="DRAW" pct={prediction.draw_prob} value={prediction.draw_value_score} color="var(--term-amber)" />
+        <ProbRow label="AWAY" pct={prediction.away_prob} value={prediction.away_value_score} color="var(--term-neg)" />
+      </div>
+
+      <div className="grid grid-cols-3 border-t border-[var(--term-border)]">
+        <Cell label="CONF" value={`${Math.round(prediction.confidence * 100)}%`} />
+        <Cell label="EV" value={`${prediction.expected_value >= 0 ? "+" : ""}${prediction.expected_value.toFixed(3)}`} color={prediction.expected_value >= 0 ? "var(--term-pos)" : "var(--term-neg)"} border />
+        <Cell label="STAKE" value={`$${prediction.stake.toFixed(2)}`} border />
       </div>
 
       <button
-        onClick={() => setExpanded(!expanded)}
-        className="text-xs text-wc-muted hover:text-wc-gold transition-colors"
+        type="button"
+        onClick={() => setExpanded((open) => !open)}
+        className="border-t border-[var(--term-border)] bg-transparent p-[10px_16px] text-left font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--term-muted)] transition-colors hover:text-[var(--accent)]"
       >
-        {expanded ? "▲ Hide reasoning" : "▼ Show reasoning"}
+        <span className="text-[var(--term-dim)]">{expanded ? "v" : ">"}</span> {expanded ? "HIDE" : "SHOW"} REASONING
       </button>
 
       {expanded && (
-        <p className="mt-2 text-xs text-wc-muted leading-relaxed border-t border-wc-border pt-2">
-          {prediction.reasoning}
-        </p>
+        <div className="p-[0_16px_16px]">
+          <p className="mt-2 border-l-2 border-[var(--term-border-2)] pl-3 text-[12.5px] leading-relaxed text-[var(--term-muted)]">
+            {prediction.reasoning}
+          </p>
+        </div>
       )}
-
-    </div>
+    </article>
   );
 }

@@ -138,5 +138,5 @@ frontend/
 
 - Backend won't start with `ModuleNotFoundError: No module named 'bcrypt'` → install with the exact Python interpreter uvicorn uses (e.g. `C:/Users/.../Python312/python.exe -m pip install bcrypt==4.2.0`).
 - All AI predictions look fake or generic → the API key for that model is blank/invalid; the predictor falls back to `_mock`.
-- Fixtures don't appear after clicking **Sync Fixtures** → either `APIFOOTBALL_API_KEY` is blank (you'll only get mocks), or no matches fall in the next 7 days for the leagues in `_LEAGUES`.
+- Fixtures don't appear after clicking **Sync Fixtures** → either `APIFOOTBALL_API_KEY` is blank (you'll only get mocks), or no matches fall in the next 14 days for the leagues in `_LEAGUES`.
 - Bets never settle → match isn't `finished` in API-Football yet, or `job_settle_matches` only runs every 10 minutes. Hit `POST /fixtures/sync` and wait, or settle by hand in the DB if you're testing.

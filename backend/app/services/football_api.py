@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://v3.football.api-sports.io"
 _HEADERS = lambda: {"x-apisports-key": settings.apifootball_api_key}
 _FINISHED_STATUSES = ("FT", "AET", "PEN")
+_UPCOMING_DAYS = 14
 
 # league_id -> (display_name, season_year)
 _LEAGUES: dict[int, tuple[str, int]] = {
@@ -260,7 +261,7 @@ async def fetch_upcoming_fixtures() -> list[dict]:
 
     today = datetime.now(timezone.utc)
     date_from = today.strftime("%Y-%m-%d")
-    date_to = (today + timedelta(days=7)).strftime("%Y-%m-%d")
+    date_to = (today + timedelta(days=_UPCOMING_DAYS - 1)).strftime("%Y-%m-%d")
 
     async with httpx.AsyncClient(timeout=30) as client:
         tasks = [
