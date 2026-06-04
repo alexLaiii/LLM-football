@@ -7,8 +7,8 @@ How this app gets to production and how to safely push changes.
 | Environment | Frontend | Backend | Database |
 |---|---|---|---|
 | Local dev | `npm run dev` on `localhost:3000` | `uvicorn` on `localhost:8000` | Postgres 16 via docker-compose, or a Neon dev branch |
-| Production v1 (Netlify-hosted) | updated to v2 on May 25 2026 | Railway | Neon |
-| Production v2 (Netlify-hosted) | https://kimfootball-predictor.netlify.app/ | Railway | Neon |
+| Production v1 (Netlify-hosted) | updated to v2 on May 29 2026 | Railway | Neon |
+| Production v2 (Netlify-hosted) | https://llmbets.netlify.app | Railway | Neon |
 
 There is no staging environment yet. Production is the only deployed env. If you're shipping anything bigger than a copy change, test it locally end-to-end first.
 
@@ -164,11 +164,10 @@ A normal day:
 
 ## Monitoring
 
-There is none yet. If production is broken you find out because the page is white or a friend on WhatsApp complains.
+There is none yet. If production is broken you find out because the page is white or a friend on Discord complains.
 
 When this matters more, the obvious additions are:
 - Railway has built-in logs — useful when triaging crashes.
-- A status endpoint already exists at `GET /health`. Wire it into UptimeRobot or similar for a free heartbeat.
 - Errors in the AI predictors are swallowed silently (the `except Exception: pass` in [orchestrator.py](../backend/app/services/ai/orchestrator.py)). For real observability, log them with the fixture ID so you can correlate against the prediction table.
 
 ## Common deploy failures
