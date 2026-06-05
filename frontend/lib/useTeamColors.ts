@@ -79,7 +79,9 @@ export function useTeamColors(crestUrl: string | null, initial: TeamTheme): Team
     (async () => {
       try {
         // Load via a same-origin blob: URL so the canvas can never be tainted.
-        const res = await fetch(`/api/crest-proxy?url=${encodeURIComponent(crestUrl)}`);
+        // `&v=` busts browser entries cached under the old `immutable` header
+        // (which served one team's crest for every team); bump it if needed.
+        const res = await fetch(`/api/crest-proxy?url=${encodeURIComponent(crestUrl)}&v=2`);
         if (!res.ok) throw new Error(`proxy responded ${res.status}`);
         objectUrl = URL.createObjectURL(await res.blob());
 
