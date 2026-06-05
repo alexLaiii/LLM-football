@@ -70,7 +70,10 @@ export async function GET(request: NextRequest) {
     headers: {
       "Content-Type": contentType,
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "public, max-age=86400, immutable",
+      // `private` so the browser still caches each crest per-URL, but the CDN
+      // does not. Netlify's shared cache was keying on the path and ignoring
+      // the `?url=` query string, serving one team's crest for every team.
+      "Cache-Control": "private, max-age=86400",
     },
   });
 }
