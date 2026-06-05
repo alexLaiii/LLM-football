@@ -37,9 +37,14 @@ export function useTeamColors(
     let cancelled = false;
     const img = new Image();
     img.crossOrigin = "anonymous";
+    img.src = `/api/crest-proxy?url=${encodeURIComponent(crestUrl)}`;
 
-    img.onload = () => {
-      if (cancelled) return;
+    // `decode()` resolves only once the bitmap is actually decoded — unlike
+    // `onload`, which can fire before the pixels are ready. Reading colours
+    // off an undecoded image yields colorthief's default colour every time
+    // (the "all cards same red" bug seen on slower production networks).
+    img.decode().then(() => {
+      if (cancelled || !img.naturalWidth) return;
       try {
         const dominant = getColorSync(img);
         const palette = getPaletteSync(img, { colorCount: 3 });
@@ -47,17 +52,16 @@ export function useTeamColors(
         const secondary = palette?.[1]?.hex() ?? palette?.[0]?.hex() ?? primary;
         const theme: TeamTheme = { primary, secondary };
         cache.set(crestUrl, theme);
-        if (!cancelled) setColors(theme);
-      } catch {
-        // Keep the initial fallback — don't throw.
+        setColors(theme);
+      } catch (err) {
+        console.warn("[crest-colors] extraction failed:", crestUrl, err);
       }
-    };
-
-    img.src = `/api/crest-proxy?url=${encodeURIComponent(crestUrl)}`;
+    }).catch((err) => {
+      console.warn("[crest-colors] decode failed:", crestUrl, err);
+    });
 
     return () => {
       cancelled = true;
-      img.onload = null;
     };
   }, [crestUrl, initial]);
 
