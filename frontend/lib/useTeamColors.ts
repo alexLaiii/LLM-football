@@ -35,17 +35,25 @@ export function useTeamColors(
     }
 
     let cancelled = false;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = `/api/crest-proxy?url=${encodeURIComponent(crestUrl)}`;
+    let objectUrl: string | null = null;
 
-    // `decode()` resolves only once the bitmap is actually decoded — unlike
-    // `onload`, which can fire before the pixels are ready. Reading colours
-    // off an undecoded image yields colorthief's default colour every time
-    // (the "all cards same red" bug seen on slower production networks).
-    img.decode().then(() => {
-      if (cancelled || !img.naturalWidth) return;
+    (async () => {
       try {
+        // Fetch the proxied crest as a blob and load it through a same-origin
+        // `blob:` URL. A crossOrigin <img> can be served from the CDN disk
+        // cache without its CORS header, which taints the canvas — colorthief
+        // then swallows the security error and returns a constant default
+        // colour, painting every card the same red. A blob: URL is always
+        // same-origin, so the canvas can never taint.
+        const res = await fetch(`/api/crest-proxy?url=${encodeURIComponent(crestUrl)}`);
+        if (!res.ok) throw new Error(`proxy responded ${res.status}`);
+        objectUrl = URL.createObjectURL(await res.blob());
+
+        const img = new Image();
+        img.src = objectUrl;
+        await img.decode();
+        if (cancelled || !img.naturalWidth) return;
+
         const dominant = getColorSync(img);
         const palette = getPaletteSync(img, { colorCount: 3 });
         const primary = dominant?.hex() ?? initial.primary;
@@ -55,10 +63,10 @@ export function useTeamColors(
         setColors(theme);
       } catch (err) {
         console.warn("[crest-colors] extraction failed:", crestUrl, err);
+      } finally {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
       }
-    }).catch((err) => {
-      console.warn("[crest-colors] decode failed:", crestUrl, err);
-    });
+    })();
 
     return () => {
       cancelled = true;
