@@ -124,6 +124,9 @@ async def run_single_prediction(
             expected_value=result.expected_value,
             stake=result.stake,
             odds=result.odds,
+            odds_home=odds["home"],
+            odds_draw=odds["draw"],
+            odds_away=odds["away"],
             reasoning=result.reasoning,
             prompt_snapshot=prompt_snapshot,
             home_value_score=result.home_value_score,
@@ -154,6 +157,7 @@ async def predict_all_in_background(
                 home_team=fixture_dict["home_team"],
                 away_team=fixture_dict["away_team"],
                 league=fixture_dict["league"],
+                kickoff_at=fixture_dict.get("kickoff_at"),
             ),
             analyze_lineups(external_id),
         )
@@ -187,6 +191,7 @@ async def run_predictions(fixture: Fixture, db: Session) -> list[Prediction]:
         "home_team_id": fixture.home_team_id,
         "away_team_id": fixture.away_team_id,
         "league": fixture.league,
+        "kickoff_at": fixture.kickoff_at,
     }
 
     match_context, odds, lineup_summary = await asyncio.gather(
@@ -196,6 +201,7 @@ async def run_predictions(fixture: Fixture, db: Session) -> list[Prediction]:
             home_team=fixture_dict["home_team"],
             away_team=fixture_dict["away_team"],
             league=fixture_dict["league"],
+            kickoff_at=fixture_dict["kickoff_at"],
         ),
         analyze_lineups(fixture.external_id),
     )
@@ -223,6 +229,9 @@ async def run_predictions(fixture: Fixture, db: Session) -> list[Prediction]:
             expected_value=r.expected_value,
             stake=r.stake,
             odds=r.odds,
+            odds_home=odds["home"],
+            odds_draw=odds["draw"],
+            odds_away=odds["away"],
             reasoning=r.reasoning,
             prompt_snapshot=prompt_snapshot,
             home_value_score=r.home_value_score,

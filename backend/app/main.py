@@ -26,6 +26,10 @@ def _migrate():
             conn.execute(text(
                 f"ALTER TABLE fixtures ADD COLUMN IF NOT EXISTS {col} INTEGER"
             ))
+        for col in ("odds_home", "odds_draw", "odds_away"):
+            conn.execute(text(
+                f"ALTER TABLE predictions ADD COLUMN IF NOT EXISTS {col} FLOAT"
+            ))
         conn.execute(text(
             "ALTER TABLE teams ADD COLUMN IF NOT EXISTS crest VARCHAR(500)"
         ))

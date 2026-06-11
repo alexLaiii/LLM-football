@@ -37,7 +37,13 @@ async def main():
     fixture = {"external_id": external_id, "home_team": home_team, "away_team": away_team, "league": "Premier League"}
     context, odds = await asyncio.gather(
         fetch_match_context(external_id),
-        fetch_odds(external_id, home_team=home_team, away_team=away_team, league="Premier League"),
+        fetch_odds(
+            external_id,
+            home_team=home_team,
+            away_team=away_team,
+            league="Premier League",
+            kickoff_at=match["utcDate"],
+        ),
     )
 
     print("Context:", json.dumps(context, indent=2))

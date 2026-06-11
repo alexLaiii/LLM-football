@@ -8,7 +8,7 @@ from app.models.fixture import Fixture
 from app.models.team import Team
 from app.schemas import FixtureOut, FixtureWithPredictions
 from app.services.football_api import fetch_lineup_available, fetch_lineup_details, fetch_upcoming_fixtures
-from app.services.odds_api import fetch_odds
+from app.services.odds_snapshot import fixture_odds_for_betting
 
 router = APIRouter(prefix="/fixtures", tags=["fixtures"])
 
@@ -46,12 +46,7 @@ async def get_fixture_odds(fixture_id: int, db: Session = Depends(get_db)):
     fixture = db.query(Fixture).filter(Fixture.id == fixture_id).first()
     if not fixture:
         raise HTTPException(status_code=404, detail="Fixture not found")
-    return await fetch_odds(
-        fixture.external_id,
-        home_team=fixture.home_team,
-        away_team=fixture.away_team,
-        league=fixture.league,
-    )
+    return await fixture_odds_for_betting(fixture, db)
 
 
 @router.get("/{fixture_id}/lineup-available")

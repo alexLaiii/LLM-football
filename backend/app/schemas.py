@@ -2,11 +2,33 @@ from datetime import datetime
 import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_-]{3,24}$")
 _PRINTABLE_ASCII_RE = re.compile(r"^[ -~]+$")
+_SNAPSHOT_ODDS_RE = re.compile(r"^odds_(home|draw|away):\s*([0-9]+(?:\.[0-9]+)?)$", re.MULTILINE)
+
+
+def _prediction_values(data, fields) -> dict:
+    if isinstance(data, dict):
+        values = dict(data)
+    else:
+        values = {field: getattr(data, field, None) for field in fields}
+
+    odds = {
+        side: values.get(f"odds_{side}")
+        for side in ("home", "draw", "away")
+        if values.get(f"odds_{side}") is not None
+    }
+    if set(odds) != {"home", "draw", "away"}:
+        odds = {match.group(1): float(match.group(2)) for match in _SNAPSHOT_ODDS_RE.finditer(values.get("prompt_snapshot") or "")}
+    if set(odds) == {"home", "draw", "away"}:
+        for side in ("home", "draw", "away"):
+            prob = values.get(f"{side}_prob")
+            if prob is not None:
+                values[f"{side}_value_score"] = round(float(prob) * odds[side], 2)
+    return values
 
 
 class FixtureOut(BaseModel):
@@ -42,6 +64,9 @@ class PredictionOut(BaseModel):
     expected_value: float
     stake: float
     odds: float
+    odds_home: Optional[float] = None
+    odds_draw: Optional[float] = None
+    odds_away: Optional[float] = None
     reasoning: str
     prompt_snapshot: Optional[str] = None
     status: str
@@ -51,6 +76,11 @@ class PredictionOut(BaseModel):
     home_value_score: Optional[float] = None
     draw_value_score: Optional[float] = None
     away_value_score: Optional[float] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def refresh_value_scores(cls, data):
+        return _prediction_values(data, cls.model_fields)
 
 
 class FixtureWithPredictions(FixtureOut):

@@ -142,6 +142,24 @@ function PredictionsLoadingPanel({ count }: { count: number }) {
   );
 }
 
+function PredictionsWaitingStrip({ count }: { count: number }) {
+  return (
+    <section className="flex flex-wrap items-center gap-3 border border-[var(--term-border)] bg-[var(--term-surface)] px-4 py-3">
+      <PredictionsPoller />
+      <span className="inline-block h-[7px] w-[7px] animate-pulse rounded-full bg-[var(--accent)]" />
+      <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--accent)]">
+        {count}/{TOTAL_AI_PREDICTIONS} MODELS REPORTED
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--term-dim)]">
+        // WAITING FOR SLOWER MODELS...
+      </span>
+      <div className="ml-auto h-[5px] w-[120px] overflow-hidden border border-[var(--term-border)] bg-[var(--term-surface-2)]">
+        <div className="h-full bg-[var(--accent)]" style={{ width: `${(count / TOTAL_AI_PREDICTIONS) * 100}%` }} />
+      </div>
+    </section>
+  );
+}
+
 export default async function MatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const fixture = await getFixture(parseInt(id));
@@ -162,7 +180,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   }
 
   const aiPredictions = fixture.predictions.filter((p) => p.model_name !== "sirkim");
-  const predictionsReady = aiPredictions.length >= TOTAL_AI_PREDICTIONS;
+  const allReady = aiPredictions.length >= TOTAL_AI_PREDICTIONS;
 
   return (
     <div className="terminal-page min-h-screen" style={{ "--accent": "var(--term-pos)" } as CSSProperties}>
@@ -176,6 +194,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
               awayTeam={fixture.away_team}
               homeTeamCrest={fixture.home_team_crest}
               awayTeamCrest={fixture.away_team_crest}
+              kickoffAt={fixture.kickoff_at}
             />
             <ConsensusStrip predictions={aiPredictions} />
           </aside>
@@ -188,15 +207,19 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
               </span>
             </div>
 
-            {!predictionsReady ? (
-              <PredictionsLoadingPanel count={aiPredictions.length} />
-            ) : (
+            {aiPredictions.length > 0 && (
               <div className="grid grid-cols-2 gap-3.5 max-[760px]:grid-cols-1">
                 {aiPredictions.map((prediction) => (
                   <PredictionCard key={prediction.id} prediction={prediction} />
                 ))}
               </div>
             )}
+            {!allReady &&
+              (aiPredictions.length === 0 ? (
+                <PredictionsLoadingPanel count={0} />
+              ) : (
+                <PredictionsWaitingStrip count={aiPredictions.length} />
+              ))}
 
             <LineupsSection
               fixtureId={fixture.id}

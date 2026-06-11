@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -21,7 +22,7 @@ from app.schemas import (
 )
 from app.services.ai.orchestrator import predict_all_in_background
 from app.services.auth import get_current_user
-from app.services.odds_api import fetch_odds
+from app.services.odds_snapshot import fixture_odds_for_betting
 
 router = APIRouter(prefix="/bets", tags=["bets"])
 
@@ -88,6 +89,12 @@ async def place_bet(
     if not fixture:
         raise HTTPException(status_code=404, detail="Fixture not found")
 
+    kickoff = fixture.kickoff_at
+    if kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=timezone.utc)
+    if kickoff <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Betting is closed: the match has already started")
+
     existing = (
         db.query(UserBet)
         .filter(UserBet.user_id == user.id, UserBet.fixture_id == fixture_id)
@@ -106,12 +113,7 @@ async def place_bet(
             detail=f"Stake ${body.stake:.2f} exceeds available bankroll ${bankroll:.2f}",
         )
 
-    odds_data = await fetch_odds(
-        fixture.external_id,
-        home_team=fixture.home_team,
-        away_team=fixture.away_team,
-        league=fixture.league,
-    )
+    odds_data = await fixture_odds_for_betting(fixture, db)
     bet_odds = round(float(odds_data.get(body.bet_on, 2.5)), 2)
 
     bet = UserBet(
@@ -139,6 +141,7 @@ async def place_bet(
             "home_team_id": fixture.home_team_id,
             "away_team_id": fixture.away_team_id,
             "league": fixture.league,
+            "kickoff_at": fixture.kickoff_at,
         }
         asyncio.create_task(
             predict_all_in_background(fixture.id, fixture_dict, fixture.external_id)

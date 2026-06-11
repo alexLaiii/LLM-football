@@ -75,6 +75,9 @@ export type Prediction = {
   expected_value: number;
   stake: number;
   odds: number;
+  odds_home: number | null;
+  odds_draw: number | null;
+  odds_away: number | null;
   reasoning: string;
   prompt_snapshot: string | null;
   status: "pending" | "won" | "lost" | "void";

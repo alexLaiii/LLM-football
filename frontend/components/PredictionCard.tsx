@@ -21,6 +21,7 @@ const MODEL_ACCENTS: Record<string, string> = {
 };
 
 const pickLabel: Record<string, string> = { home: "HOME", draw: "DRAW", away: "AWAY" };
+type Outcome = "home" | "draw" | "away";
 
 function money(value: number) {
   return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toFixed(2)}`;
@@ -31,6 +32,10 @@ function statusBadge(prediction: Prediction) {
   if (prediction.status === "lost") return { label: `LOST ${money(prediction.profit_loss ?? 0)}`, cls: "border-[rgba(255,89,112,.45)] bg-[rgba(255,89,112,.08)] text-[var(--term-neg)]" };
   if (prediction.status === "void") return { label: "VOID", cls: "border-[var(--term-border-2)] text-[var(--term-dim)]" };
   return { label: "PENDING", cls: "border-[rgba(255,180,84,.38)] text-[var(--term-amber)]" };
+}
+
+function isMockPrediction(prediction: Prediction) {
+  return prediction.reasoning.trim().startsWith("[MOCK]") || prediction.prompt_snapshot?.startsWith("USED DATA (MOCK):");
 }
 
 function ProbRow({
@@ -74,12 +79,38 @@ function Cell({ label, value, color, border }: { label: string; value: string; c
   );
 }
 
+function promptOdds(prediction: Prediction): Partial<Record<Outcome, number>> {
+  const odds: Partial<Record<Outcome, number>> = {};
+  for (const match of prediction.prompt_snapshot?.matchAll(/^odds_(home|draw|away):\s*([0-9]+(?:\.[0-9]+)?)/gm) ?? []) {
+    odds[match[1] as Outcome] = Number(match[2]);
+  }
+  return odds;
+}
+
+function outcomeOdds(prediction: Prediction, side: Outcome) {
+  const saved = side === "home" ? prediction.odds_home : side === "draw" ? prediction.odds_draw : prediction.odds_away;
+  if (saved !== null && saved !== undefined) return saved;
+  const snapshot = promptOdds(prediction)[side];
+  if (snapshot !== undefined) return snapshot;
+  return prediction.bet_on === side ? prediction.odds : null;
+}
+
+function valueScore(prediction: Prediction, side: Outcome) {
+  const odds = outcomeOdds(prediction, side);
+  if (odds === null) return prediction[`${side}_value_score`];
+  return prediction[`${side}_prob`] * odds;
+}
+
 export default function PredictionCard({ prediction }: { prediction: Prediction }) {
   const [expanded, setExpanded] = useState(false);
   const label = MODEL_LABELS[prediction.model_name] ?? prediction.model_name;
   const accent = MODEL_ACCENTS[prediction.model_name] ?? "var(--term-cyan)";
   const badge = statusBadge(prediction);
+  const mock = isMockPrediction(prediction);
   const pick = pickLabel[prediction.bet_on] ?? prediction.bet_on.toUpperCase();
+  const homeValue = valueScore(prediction, "home");
+  const drawValue = valueScore(prediction, "draw");
+  const awayValue = valueScore(prediction, "away");
 
   return (
     <article
@@ -95,6 +126,11 @@ export default function PredictionCard({ prediction }: { prediction: Prediction 
             <ModelIcon model={prediction.model_name} label={label} className="h-full w-full object-contain" />
           </span>
           <span className="font-mono text-sm font-semibold text-[var(--term-text)]">{label}</span>
+          {mock && (
+            <span className="border border-[rgba(255,89,112,.48)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--term-neg)]">
+              MOCK
+            </span>
+          )}
           <span className={`ml-auto inline-flex items-center gap-1.5 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] ${badge.cls}`}>
             {prediction.status === "pending" && <i className="h-[6px] w-[6px] rounded-full bg-[var(--term-cyan)]" />}
             {badge.label}
@@ -110,9 +146,9 @@ export default function PredictionCard({ prediction }: { prediction: Prediction 
       </div>
 
       <div className="grid gap-2 p-[14px_16px]">
-        <ProbRow label="HOME" pct={prediction.home_prob} value={prediction.home_value_score} color="var(--term-pos)" shimmer />
-        <ProbRow label="DRAW" pct={prediction.draw_prob} value={prediction.draw_value_score} color="var(--term-amber)" />
-        <ProbRow label="AWAY" pct={prediction.away_prob} value={prediction.away_value_score} color="var(--term-neg)" />
+        <ProbRow label="HOME" pct={prediction.home_prob} value={homeValue} color="var(--term-pos)" shimmer />
+        <ProbRow label="DRAW" pct={prediction.draw_prob} value={drawValue} color="var(--term-amber)" />
+        <ProbRow label="AWAY" pct={prediction.away_prob} value={awayValue} color="var(--term-neg)" />
       </div>
 
       <div className="grid grid-cols-3 border-t border-[var(--term-border)]">

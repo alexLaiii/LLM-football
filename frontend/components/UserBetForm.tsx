@@ -20,6 +20,7 @@ type Props = {
   awayTeam: string;
   homeTeamCrest: string | null;
   awayTeamCrest: string | null;
+  kickoffAt: string;
 };
 
 const BET_OPTIONS: { value: "home" | "draw" | "away" }[] = [
@@ -70,7 +71,19 @@ function Header({ title, userName }: { title: string; userName?: string }) {
   );
 }
 
-export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCrest, awayTeamCrest }: Props) {
+function BettingClosed({ userName }: { userName?: string }) {
+  return (
+    <section className="border border-[var(--term-border)] bg-[var(--term-surface)] p-[18px]">
+      <Header title="BETTING CLOSED" userName={userName} />
+      <div className="py-4 text-center">
+        <div className="mb-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">// MATCH HAS STARTED &mdash; WAGERS LOCKED</div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--term-dim)]">No new positions can be opened after kickoff.</div>
+      </div>
+    </section>
+  );
+}
+
+export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCrest, awayTeamCrest, kickoffAt }: Props) {
   const router = useRouter();
   const { user, token } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
@@ -79,12 +92,34 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
   const [bankroll, setBankroll] = useState<number | null>(null);
   const [existingBet, setExistingBet] = useState<UserBet | null>(null);
   const [odds, setOdds] = useState<Odds | null>(null);
+  const [loadingOdds, setLoadingOdds] = useState(true);
   const [loadingExisting, setLoadingExisting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [started, setStarted] = useState(() => new Date(kickoffAt).getTime() <= Date.now());
+
+  // Flip to "started" exactly at kickoff so the form locks even if the user
+  // is sitting on the page when the match begins.
+  useEffect(() => {
+    if (started) return;
+    const ms = new Date(kickoffAt).getTime() - Date.now();
+    if (ms > 2_000_000_000) return; // too far out to schedule; re-checked on next mount
+    const timer = setTimeout(() => setStarted(true), Math.max(0, ms));
+    return () => clearTimeout(timer);
+  }, [kickoffAt, started]);
 
   useEffect(() => {
-    getOdds(fixtureId).then(setOdds);
+    let ignore = false;
+    setOdds(null);
+    setLoadingOdds(true);
+    getOdds(fixtureId).then((nextOdds) => {
+      if (ignore) return;
+      setOdds(nextOdds);
+      setLoadingOdds(false);
+    });
+    return () => {
+      ignore = true;
+    };
   }, [fixtureId]);
 
   useEffect(() => {
@@ -105,8 +140,16 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
 
   async function submitBet() {
     if (!token) return;
+    if (started) {
+      setError("Betting closed — the match has already started.");
+      return;
+    }
     if (!stakeNum || stakeNum <= 0) {
       setError("Enter a valid bet amount.");
+      return;
+    }
+    if (loadingOdds || !selectedOdds) {
+      setError("Odds are still loading.");
       return;
     }
     if (bankroll !== null && stakeNum > bankroll) {
@@ -134,6 +177,7 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
   }
 
   if (!user) {
+    if (started) return <BettingClosed />;
     return (
       <>
         <section className="border border-[var(--term-border)] bg-[var(--term-surface)] p-[18px]">
@@ -212,6 +256,8 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
     );
   }
 
+  if (started) return <BettingClosed userName={user.username} />;
+
   return (
     <section className="border border-[var(--term-border)] bg-[var(--term-surface)] p-[18px]">
       <Header title="PLACE WAGER" userName={user.username} />
@@ -233,7 +279,7 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
                 <TeamLogo src={crest} alt={label} className="mx-auto h-6 w-6" />
                 <span className="mt-1 block truncate text-[11px]">{label}</span>
                 <span className={`mt-1 block font-mono text-[15px] font-semibold tabular-nums ${selected ? "text-[var(--accent)]" : "text-[var(--term-muted)]"}`}>
-                  {odd !== null ? odd.toFixed(2) : "--"}
+                  {loadingOdds ? "FETCHING" : odd !== null ? odd.toFixed(2) : "--"}
                 </span>
               </button>
             );
@@ -264,10 +310,10 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
         <div className="mt-3.5 flex items-center justify-between gap-4 border-t border-[var(--term-border)] pt-3.5">
           <div>
             <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">POTENTIAL PAYOUT</div>
-            <div className="font-mono text-[22px] font-semibold tabular-nums text-[var(--term-pos)]">{potentialPayout !== null ? money(potentialPayout) : "$0.00"}</div>
+            <div className={`font-mono font-semibold tabular-nums text-[var(--term-pos)] ${loadingOdds ? "text-[13px]" : "text-[22px]"}`}>{loadingOdds ? "FETCHING ODDS" : potentialPayout !== null ? money(potentialPayout) : "$0.00"}</div>
           </div>
-          <button type="submit" disabled={loading || !stake} className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] shadow-[0_0_22px_-6px_var(--accent)] disabled:opacity-50">
-            {loading ? "PLACING..." : "CONFIRM WAGER >"}
+          <button type="submit" disabled={loading || loadingOdds || !stake} className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] shadow-[0_0_22px_-6px_var(--accent)] disabled:opacity-50">
+            {loading ? "PLACING..." : loadingOdds ? "FETCHING ODDS..." : "CONFIRM WAGER >"}
           </button>
         </div>
 
@@ -279,8 +325,8 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
         {error && <p className="mt-3 text-xs text-[var(--term-neg)]">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--term-border-2)] bg-[rgba(17,22,30,.94)] px-6 py-3.5 backdrop-blur md:hidden">
-          <button type="submit" disabled={loading || !stake} className="w-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] disabled:opacity-50">
-            {loading ? "PLACING..." : "CONFIRM WAGER >"}
+          <button type="submit" disabled={loading || loadingOdds || !stake} className="w-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] disabled:opacity-50">
+            {loading ? "PLACING..." : loadingOdds ? "FETCHING ODDS..." : "CONFIRM WAGER >"}
           </button>
         </div>
       </form>

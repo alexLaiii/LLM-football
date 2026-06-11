@@ -25,16 +25,110 @@ When estimating true probabilities, weight factors approximately as:
 - H2H: 0-5%"""
 
 
-def build_user_message(fixture: dict, odds: dict, match_context: dict) -> str:
-    """Shared user message for all predictors. Appends WC-specific rules for World Cup fixtures only."""
-    msg = (
+# ---------------------------------------------------------------------------
+# Shared prompt building blocks.
+#
+# The *content* below is identical for every model — only each model file's
+# *formatting* of it differs (XML for Claude, Markdown for GPT/Grok/Gemini,
+# a single user turn for the DeepSeek-R1 reasoning model). Keeping the task
+# text shared means the leaderboard compares models, not divergent prompts.
+# ---------------------------------------------------------------------------
+ROLE = (
+    "You are a football match prediction analyst. Using the match information and the "
+    "bookmaker odds as a market reference, estimate the TRUE probability of each outcome "
+    "(home win, draw, away win) as accurately and honestly as you can. A separate system "
+    "turns your probabilities into the bet, so your only job is a well-calibrated "
+    "probability estimate — do not pick a bet or compute value/expected value yourself."
+)
+
+CONTEXT_GLOSSARY = """The context JSON may contain:
+- home_last5 / away_last5: recent form over last 5 matches
+- home_last5_home / away_last5_away: home/away-specific form splits
+- home_goals_avg_last5 / away_goals_avg_last5: average goals scored in last 5 matches
+- home_goals_avg_last5_home / away_goals_avg_last5_away: average goals scored in home/away split
+- home_standing / away_standing: league position, points, wins, draws, losses, goals for, goals against, goal difference
+- home_rest_days / away_rest_days: days since each team's last match
+- home_top_scorer / away_top_scorer: team's top scorer and goals
+- h2h: head-to-head record between the teams
+- home_lineup / away_lineup: starting XI if available
+- home_injuries / away_injuries: injured/suspended players
+- lineup_summary: natural-language summary of lineup strength and key absences for both teams"""
+
+TASK_STEPS = """1. Judge the relative strength of the two teams from the match context (form, standings, lineups, injuries, rest days, H2H, home/away splits).
+2. Treat the bookmaker odds as the market's view, for reference only — form your own honest estimate rather than copying the market back.
+3. Output your true probability for each outcome as home_prob, draw_prob, away_prob. They must sum to 1.00.
+4. Give a short reasoning for the key factors behind your estimate, plus an overall confidence in it.
+
+Do NOT choose a bet, and do NOT compute value scores or expected value — that is handled deterministically in code from your probabilities. Focus only on producing a well-calibrated probability estimate."""
+
+JSON_EXAMPLE = """{
+  "home_prob": 0.45,
+  "draw_prob": 0.27,
+  "away_prob": 0.28,
+  "reasoning": "Brief explanation of the key factors behind these probabilities.",
+  "confidence": 0.65
+}"""
+
+OUTPUT_RULES = """- home_prob + draw_prob + away_prob must sum to 1.00 after rounding to 2 decimal places.
+- Each probability must be a decimal between 0 and 1.
+- confidence must be between 0.35 and 0.95.
+- reasoning must be 1-2 sentences on the key factors behind the probabilities, not a bet recommendation.
+- Do not include markdown, a bet pick, value scores, extra keys, calculations, or any text outside the JSON."""
+
+# JSON schema for providers with structured outputs (OpenAI, Gemini). The model
+# returns ONLY its probability estimate, reasoning, and confidence; the bet,
+# value scores, and EV are computed in code (see make_result).
+_SCHEMA_FIELDS = ["home_prob", "draw_prob", "away_prob", "reasoning", "confidence"]
+
+PREDICTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "home_prob": {"type": "number"},
+        "draw_prob": {"type": "number"},
+        "away_prob": {"type": "number"},
+        "reasoning": {"type": "string"},
+        "confidence": {"type": "number"},
+    },
+    "required": _SCHEMA_FIELDS,
+    "additionalProperties": False,
+}
+
+
+def extract_json(raw: str) -> dict:
+    """Parse a JSON object out of a model response, tolerating code fences and
+    any leading/trailing prose (e.g. a reasoning model's stray text)."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.lstrip().lower().startswith("json"):
+            raw = raw.lstrip()[4:]
+    start, end = raw.find("{"), raw.rfind("}")
+    if start != -1 and end != -1:
+        raw = raw[start:end + 1]
+    return json.loads(raw)
+
+
+def build_match_data(fixture: dict, odds: dict, match_context: dict) -> str:
+    """The match data block (no competition rules), shared by all predictors."""
+    return (
         f"Match: {fixture['home_team']} vs {fixture['away_team']}\n"
         f"League: {fixture['league']}\n"
         f"Odds: Home={odds['home']:.2f}, Draw={odds['draw']:.2f}, Away={odds['away']:.2f}\n"
         f"Context: {json.dumps(match_context)}"
     )
-    if fixture.get("league") == "World Cup":
-        msg += f"\n{_WC_RULES}"
+
+
+def world_cup_rules(fixture: dict) -> str:
+    """World Cup-specific guidance, or '' for other competitions."""
+    return _WC_RULES if fixture.get("league") == "World Cup" else ""
+
+
+def build_user_message(fixture: dict, odds: dict, match_context: dict) -> str:
+    """Shared user message for all predictors. Appends WC-specific rules for World Cup fixtures only."""
+    msg = build_match_data(fixture, odds, match_context)
+    rules = world_cup_rules(fixture)
+    if rules:
+        msg += f"\n{rules}"
     return msg
 
 
@@ -83,3 +177,43 @@ def random_probs() -> dict[str, float]:
     """Random home/draw/away probabilities that sum to 1."""
     a, b = sorted([random.random(), random.random()])
     return {"home": round(a, 3), "draw": round(b - a, 3), "away": round(1 - b, 3)}
+
+
+def compute_value(probs: dict, odds: dict) -> tuple[dict, dict]:
+    """From true probabilities + decimal odds, return (value_scores, expected_values)
+    per outcome. value = prob / raw implied probability; ev = prob * odds - 1.
+    Done in code so the numbers are always internally consistent."""
+    value = {k: round(probs[k] * odds[k], 2) for k in ("home", "draw", "away")}
+    ev = {k: probs[k] * odds[k] - 1 for k in ("home", "draw", "away")}
+    return value, ev
+
+
+def make_result(predictor: "BasePredictor", raw_probs: dict, confidence: float,
+                reasoning: str, odds: dict, bankroll: float) -> PredictionResult:
+    """Build a full prediction from a model's probability estimate. The bet,
+    value scores, EV, and stake are all computed here, so they always reconcile —
+    the model only supplies probabilities, reasoning, and confidence."""
+    total = raw_probs["home"] + raw_probs["draw"] + raw_probs["away"]
+    if total <= 0:
+        total = 1.0
+    probs = {k: raw_probs[k] / total for k in ("home", "draw", "away")}
+    value, ev_all = compute_value(probs, odds)
+    bet_on = max(ev_all, key=ev_all.get)  # highest EV (equivalently, highest value score)
+    bet_odds = odds[bet_on]
+    ev = round(ev_all[bet_on], 3)
+    stake = predictor.calculate_stake(ev, confidence, bankroll, bet_odds)
+    return PredictionResult(
+        model_name=predictor.name,
+        home_prob=round(probs["home"], 3),
+        draw_prob=round(probs["draw"], 3),
+        away_prob=round(probs["away"], 3),
+        bet_on=bet_on,
+        confidence=confidence,
+        expected_value=ev,
+        stake=stake,
+        odds=bet_odds,
+        reasoning=reasoning,
+        home_value_score=value["home"],
+        draw_value_score=value["draw"],
+        away_value_score=value["away"],
+    )
