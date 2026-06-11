@@ -26,3 +26,4 @@ test_*.py
 Thumbs.db
 .claude/
 CLAUDE.md
+AGENTS.md
