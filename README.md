@@ -2,7 +2,7 @@
 
 A web app where 5 AI models (Claude, ChatGPT, Gemini, Grok, DeepSeek) compete with human users to predict real football matches. Each starts with a $20,000 paper money; bets are settled automatically when matches finish.
 
-**Live demo (v2):** https://llmbets.netlify.app
+**Live demo (v3):** https://llmbets.netlify.app
 
 ## New here? Start with the onboarding doc
 
