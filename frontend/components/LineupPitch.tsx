@@ -58,15 +58,14 @@ function PitchLines() {
 }
 
 function playerLabel(player: LineupPlayer): string {
-  const surname = player.name.split(" ").pop() ?? player.name;
-  return player.number ? `${player.number} ${surname}` : surname;
+  return player.number ? `${player.number} ${player.name}` : player.name;
 }
 
 function PlayerDot({ player }: { player: LineupPlayer }) {
   return (
     <div className="flex flex-col items-center gap-1" style={{ width: "20%" }} title={player.name}>
       <div className="h-[11px] w-[11px] rounded-full bg-[var(--lineup-accent)] opacity-90 shadow-[0_0_8px_-2px_var(--lineup-accent)]" />
-      <span className="max-w-full truncate font-mono text-[9px] leading-none text-[var(--term-text)]">{playerLabel(player)}</span>
+      <span className="max-w-full break-words text-center font-mono text-[9px] leading-tight text-[var(--term-text)]">{playerLabel(player)}</span>
     </div>
   );
 }

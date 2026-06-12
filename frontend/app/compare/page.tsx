@@ -371,8 +371,8 @@ function MatchCardB({ match, open, onToggle }: { match: VMatch; open: boolean; o
 function LoggedOut({ onSignIn, onCreate }: { onSignIn: () => void; onCreate: () => void }) {
   return (
     <div className="compare-gate">
-      <h2>Sign in to compare</h2>
-      <p>Compare Me to AI lines your own bets up against all five machines - same matches, same odds. Sign in to load your card and see how your P/L stacks up.</p>
+      <h2>Sign in and place your bet</h2>
+      <p>Compare Me to AI compare your bets up against all five models on the same matches.</p>
       <div>
         <button type="button" className="compare-btn is-primary" onClick={onSignIn}>SIGN IN</button>
         <button type="button" className="compare-btn" onClick={onCreate}>CREATE ACCOUNT</button>

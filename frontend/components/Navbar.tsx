@@ -155,7 +155,7 @@ export default function Navbar() {
           <Monogram />
           <span className="terminal-brand-copy">
             <strong>Can AI Win Bets</strong>
-            <small>Five models, one human, live on the board.</small>
+            <small>Five models place their bets on football matches</small>
           </span>
         </Link>
         <div className="terminal-nav-section">NAV ── 0x01</div>

@@ -93,7 +93,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialMode = "log
           <div className="absolute inset-x-0 bottom-0 hidden p-8 text-white md:block">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/70">AI Football Predictor</p>
             <p className="mt-2 max-w-sm font-merriweather text-3xl font-black leading-tight">
-              Make your call. Then see how the models answer.
+              Place your bets and see if you can outsmart the models.
             </p>
           </div>
         </div>
