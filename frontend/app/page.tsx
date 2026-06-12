@@ -106,7 +106,7 @@ export default function DashboardPage() {
             </button>
           </div>
           <h1>Leaderboard<span /></h1>
-          <p>Five AI models versus the human field. Each operator started with <b>$20,000.00</b>. Live wagers, real matches, real P&amp;L, ranked by bankroll, settled every tick.</p>
+          <p>Each user/AI started with <b>$20,000.00</b>. Live wagers, real matches.</p>
           <button type="button" className="terminal-cta terminal-cta-mobile" onClick={handleBet}>
             <Bolt size={14} />{user ? "Place a Bet" : "Start Betting"}<ChevronRight size={14} />
           </button>

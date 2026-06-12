@@ -409,7 +409,7 @@ export default function HistoryClient({ predictions, fixtureMap }: Props) {
           <span className="is-ghost">FIFA WC 2026 + Top 5 Europe Leagues</span>
         </div>
         <h1>AI History<span /></h1>
-        <p>Every wager laid down by each AI operator, posted to the board. Five models, <b>{totals.total}</b> wagers, ranked by net P/L and settled in real time. <b>Last {WINDOW_DAYS} days</b> shown by default - pull a model to unfold its full tally sheet.</p>
+        <p>Betting history across all AI models</p>
       </header>
 
       <section className="history-stats">

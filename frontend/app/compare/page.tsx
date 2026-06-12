@@ -231,9 +231,7 @@ function PageHead({ username, matchesBet }: { username: string; matchesBet: numb
       </div>
       <h1>Compare Me to AI<span /></h1>
       <p>
-        Every bet you&apos;ve laid down, lined up against the same call from all five machines - identical matches,
-        identical odds, nowhere to hide. You&apos;re <b>{username}</b>, one human against <b>5 models</b> across{" "}
-        <b>{matchesBet} matches</b>. Settled in real time - open any match to unfold the full tally sheet.
+        Your bet result compare to LLM.
       </p>
     </header>
   );
