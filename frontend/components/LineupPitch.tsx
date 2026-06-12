@@ -57,18 +57,25 @@ function PitchLines() {
   );
 }
 
+function playerLabel(player: LineupPlayer): string {
+  const surname = player.name.split(" ").pop() ?? player.name;
+  return player.number ? `${player.number} ${surname}` : surname;
+}
+
 function PlayerDot({ player }: { player: LineupPlayer }) {
   return (
-    <div className="flex flex-col items-center" style={{ width: "20%" }} title={player.name}>
+    <div className="flex flex-col items-center gap-1" style={{ width: "20%" }} title={player.name}>
       <div className="h-[11px] w-[11px] rounded-full bg-[var(--lineup-accent)] opacity-90 shadow-[0_0_8px_-2px_var(--lineup-accent)]" />
+      <span className="max-w-full truncate font-mono text-[9px] leading-none text-[var(--term-text)]">{playerLabel(player)}</span>
     </div>
   );
 }
 
 function PlaceholderDot() {
   return (
-    <div className="flex flex-col items-center" style={{ width: "20%" }}>
+    <div className="flex flex-col items-center gap-1" style={{ width: "20%" }}>
       <div className="h-[11px] w-[11px] rounded-full bg-[var(--lineup-accent)] opacity-90 shadow-[0_0_8px_-2px_var(--lineup-accent)]" />
+      <span className="font-mono text-[9px] leading-none">&nbsp;</span>
     </div>
   );
 }
