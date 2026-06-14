@@ -18,7 +18,7 @@ from app.services.ai.base import (
     OUTPUT_RULES,
 )
 
-_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
 
 SYSTEM_PROMPT = f"""{ROLE}
 
