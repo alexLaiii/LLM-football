@@ -85,7 +85,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialMode = "log
       >
         <div className="relative h-44 overflow-hidden bg-slate-900 sm:h-52 md:h-full">
           <img
-            src="/auth-stadium.png"
+            src="/auth-stadium.webp"
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
           />

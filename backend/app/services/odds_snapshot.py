@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.fixture import Fixture
 from app.models.prediction import Prediction
-from app.services.odds_api import fetch_odds
+from app.services.odds_api import fetch_odds, is_real_odds
 
 _SNAPSHOT_ODDS_RE = re.compile(r"^odds_(home|draw|away):\s*([0-9]+(?:\.[0-9]+)?)$", re.MULTILINE)
 
@@ -45,13 +45,13 @@ def prediction_odds_snapshot(fixture_id: int, db: Session) -> dict | None:
 
 
 async def fixture_odds_for_betting(fixture: Fixture, db: Session) -> dict:
-    frozen = prediction_odds_snapshot(fixture.id, db)
-    if frozen:
-        return frozen
-    return await fetch_odds(
-        fixture.external_id,
-        home_team=fixture.home_team,
-        away_team=fixture.away_team,
-        league=fixture.league,
-        kickoff_at=fixture.kickoff_at,
-    )
+    odds = prediction_odds_snapshot(fixture.id, db)
+    if odds is None:
+        odds = await fetch_odds(
+            fixture.external_id,
+            home_team=fixture.home_team,
+            away_team=fixture.away_team,
+            league=fixture.league,
+            kickoff_at=fixture.kickoff_at,
+        )
+    return {**odds, "available": is_real_odds(fixture.external_id, odds)}

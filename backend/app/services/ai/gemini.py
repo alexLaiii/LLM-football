@@ -18,7 +18,7 @@ from app.services.ai.base import (
     OUTPUT_RULES,
 )
 
-_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
+_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
 
 SYSTEM_PROMPT = f"""{ROLE}
 
@@ -32,19 +32,19 @@ SYSTEM_PROMPT = f"""{ROLE}
 {OUTPUT_RULES}"""
 
 # Gemini's responseSchema uses uppercase Type enums and propertyOrdering.
-# propertyOrdering is reason-first: value scores + reasoning are emitted before
-# bet_on, so Gemini reasons before committing instead of betting the favorite.
+# propertyOrdering is reasoning-first: reasoning is emitted before the
+# probabilities so Gemini reasons before committing to its numbers.
 _GEMINI_SCHEMA = {
     "type": "OBJECT",
     "properties": {
+        "reasoning": {"type": "STRING"},
         "home_prob": {"type": "NUMBER"},
         "draw_prob": {"type": "NUMBER"},
         "away_prob": {"type": "NUMBER"},
-        "reasoning": {"type": "STRING"},
         "confidence": {"type": "NUMBER"},
     },
-    "required": ["home_prob", "draw_prob", "away_prob", "reasoning", "confidence"],
-    "propertyOrdering": ["home_prob", "draw_prob", "away_prob", "reasoning", "confidence"],
+    "required": ["reasoning", "home_prob", "draw_prob", "away_prob", "confidence"],
+    "propertyOrdering": ["reasoning", "home_prob", "draw_prob", "away_prob", "confidence"],
 }
 
 

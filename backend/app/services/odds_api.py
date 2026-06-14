@@ -50,6 +50,15 @@ _MOCK_ODDS: dict[str, dict] = {
 _DEFAULT_ODDS = {"home": 2.50, "draw": 3.20, "away": 2.80, "kickoff_at": None}
 
 
+def is_real_odds(external_id: str, odds: dict | None) -> bool:
+    """True only for genuine bookmaker odds — not the mock_* demo fixtures nor
+    the _DEFAULT_ODDS placeholder returned when real odds can't be fetched."""
+    if odds is None or external_id.startswith("mock_"):
+        return False
+    triple = (odds.get("home"), odds.get("draw"), odds.get("away"))
+    return triple != (_DEFAULT_ODDS["home"], _DEFAULT_ODDS["draw"], _DEFAULT_ODDS["away"])
+
+
 async def fetch_odds(
     external_id: str,
     home_team: str = "",

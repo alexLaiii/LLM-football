@@ -62,10 +62,10 @@ TASK_STEPS = """1. Judge the relative strength of the two teams from the match c
 Do NOT choose a bet, and do NOT compute value scores or expected value — that is handled deterministically in code from your probabilities. Focus only on producing a well-calibrated probability estimate."""
 
 JSON_EXAMPLE = """{
+  "reasoning": "Brief explanation of the key factors behind these probabilities.",
   "home_prob": 0.45,
   "draw_prob": 0.27,
   "away_prob": 0.28,
-  "reasoning": "Brief explanation of the key factors behind these probabilities.",
   "confidence": 0.65
 }"""
 
@@ -78,15 +78,17 @@ OUTPUT_RULES = """- home_prob + draw_prob + away_prob must sum to 1.00 after rou
 # JSON schema for providers with structured outputs (OpenAI, Gemini). The model
 # returns ONLY its probability estimate, reasoning, and confidence; the bet,
 # value scores, and EV are computed in code (see make_result).
-_SCHEMA_FIELDS = ["home_prob", "draw_prob", "away_prob", "reasoning", "confidence"]
+# Fields are ordered reasoning-first so the model reasons before committing to
+# the probabilities (structured outputs emit fields in property order).
+_SCHEMA_FIELDS = ["reasoning", "home_prob", "draw_prob", "away_prob", "confidence"]
 
 PREDICTION_SCHEMA = {
     "type": "object",
     "properties": {
+        "reasoning": {"type": "string"},
         "home_prob": {"type": "number"},
         "draw_prob": {"type": "number"},
         "away_prob": {"type": "number"},
-        "reasoning": {"type": "string"},
         "confidence": {"type": "number"},
     },
     "required": _SCHEMA_FIELDS,

@@ -134,7 +134,8 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
     });
   }, [token, fixtureId]);
 
-  const selectedOdds = odds ? odds[betOn] : null;
+  const oddsAvailable = Boolean(odds?.available);
+  const selectedOdds = odds && odds.available ? odds[betOn] : null;
   const stakeNum = parseFloat(stake);
   const potentialPayout = selectedOdds && stakeNum > 0 ? stakeNum * selectedOdds : null;
 
@@ -148,8 +149,12 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
       setError("Enter a valid bet amount.");
       return;
     }
-    if (loadingOdds || !selectedOdds) {
+    if (loadingOdds) {
       setError("Odds are still loading.");
+      return;
+    }
+    if (!selectedOdds) {
+      setError("Odds are not available for this match yet.");
       return;
     }
     if (bankroll !== null && stakeNum > bankroll) {
@@ -267,7 +272,7 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
           {BET_OPTIONS.map(({ value }) => {
             const crest = value === "home" ? homeTeamCrest : value === "away" ? awayTeamCrest : null;
             const label = pickName(value, homeTeam, awayTeam);
-            const odd = odds ? odds[value] : null;
+            const odd = odds && odds.available ? odds[value] : null;
             const selected = betOn === value;
             return (
               <button
@@ -310,10 +315,10 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
         <div className="mt-3.5 flex items-center justify-between gap-4 border-t border-[var(--term-border)] pt-3.5">
           <div>
             <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">POTENTIAL PAYOUT</div>
-            <div className={`font-mono font-semibold tabular-nums text-[var(--term-pos)] ${loadingOdds ? "text-[13px]" : "text-[22px]"}`}>{loadingOdds ? "FETCHING ODDS" : potentialPayout !== null ? money(potentialPayout) : "$0.00"}</div>
+            <div className={`font-mono font-semibold tabular-nums text-[var(--term-pos)] ${loadingOdds || !oddsAvailable ? "text-[13px]" : "text-[22px]"}`}>{loadingOdds ? "FETCHING ODDS" : !oddsAvailable ? "ODDS UNAVAILABLE" : potentialPayout !== null ? money(potentialPayout) : "$0.00"}</div>
           </div>
-          <button type="submit" disabled={loading || loadingOdds || !stake} className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] shadow-[0_0_22px_-6px_var(--accent)] disabled:opacity-50">
-            {loading ? "PLACING..." : loadingOdds ? "FETCHING ODDS..." : "CONFIRM WAGER >"}
+          <button type="submit" disabled={loading || loadingOdds || !oddsAvailable || !stake} className="border border-[var(--accent)] bg-[var(--accent)] px-5 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] shadow-[0_0_22px_-6px_var(--accent)] disabled:opacity-50">
+            {loading ? "PLACING..." : loadingOdds ? "FETCHING ODDS..." : !oddsAvailable ? "ODDS UNAVAILABLE" : "CONFIRM WAGER >"}
           </button>
         </div>
 
@@ -325,8 +330,8 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
         {error && <p className="mt-3 text-xs text-[var(--term-neg)]">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--term-border-2)] bg-[rgba(17,22,30,.94)] px-6 py-3.5 backdrop-blur md:hidden">
-          <button type="submit" disabled={loading || loadingOdds || !stake} className="w-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] disabled:opacity-50">
-            {loading ? "PLACING..." : loadingOdds ? "FETCHING ODDS..." : "CONFIRM WAGER >"}
+          <button type="submit" disabled={loading || loadingOdds || !oddsAvailable || !stake} className="w-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-3 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--term-bg)] disabled:opacity-50">
+            {loading ? "PLACING..." : loadingOdds ? "FETCHING ODDS..." : !oddsAvailable ? "ODDS UNAVAILABLE" : "CONFIRM WAGER >"}
           </button>
         </div>
       </form>

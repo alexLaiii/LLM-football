@@ -114,6 +114,8 @@ async def place_bet(
         )
 
     odds_data = await fixture_odds_for_betting(fixture, db)
+    if not odds_data.get("available"):
+        raise HTTPException(status_code=400, detail="Odds are not available for this match yet")
     bet_odds = round(float(odds_data.get(body.bet_on, 2.5)), 2)
 
     bet = UserBet(
