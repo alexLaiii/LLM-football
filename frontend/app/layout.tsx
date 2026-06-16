@@ -9,9 +9,6 @@ const SITE_DESCRIPTION =
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://llmbets.ca"),
-  // TEMP (2026-06-16, revert when told): hide the whole site from search engines.
-  // Delete this `robots` block to make the site indexable again.
-  robots: { index: false, follow: false },
   title: {
     default: "LLM Bets — Can AI Win Football Bets?",
     template: "%s | LLM Bets",
