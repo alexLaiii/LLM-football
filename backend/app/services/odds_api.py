@@ -16,6 +16,7 @@ _V2_BASE_URL = "https://api.pulsescore.net/api/v2/bet365"
 _V3_BASE_URL = "https://api.pulsescore.net/api/v3/bet365"
 _HEADERS = lambda: {"X-Secret": settings.pulsescore_api_key}
 _CACHE_TTL = 300  # seconds
+_LIVE_CACHE_TTL = 30  # live odds move fast; short cache, just enough to share across fixtures
 _KICKOFF_MATCH_WINDOW = timedelta(hours=18)
 
 # Map our league names (from API-Football) to PulseScore leagueName values.
@@ -39,6 +40,7 @@ _V3_LEAGUE_MAP = {
 # {ps_league_name: (fetched_at_timestamp, [events])}
 _v2_league_cache: dict[str, tuple[float, list]] = {}
 _v3_league_cache: dict[str, tuple[float, list]] = {}
+_live_events_cache: dict[str, tuple[float, list]] = {}
 
 _MOCK_ODDS: dict[str, dict] = {
     "mock_001": {"home": 2.10, "draw": 3.40, "away": 3.60, "kickoff_at": None},
@@ -57,6 +59,55 @@ def is_real_odds(external_id: str, odds: dict | None) -> bool:
         return False
     triple = (odds.get("home"), odds.get("draw"), odds.get("away"))
     return triple != (_DEFAULT_ODDS["home"], _DEFAULT_ODDS["draw"], _DEFAULT_ODDS["away"])
+
+
+async def _fetch_live_soccer_events() -> list:
+    """All in-play soccer events (markets inline), cached briefly."""
+    cached = _live_events_cache.get("soccer")
+    if cached and time.monotonic() - cached[0] < _LIVE_CACHE_TTL:
+        return cached[1]
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{_V3_BASE_URL}/live-events",
+            headers=_HEADERS(),
+            params={"sport": "soccer", "limit": 200},
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        events = data.get("events") if isinstance(data, dict) else data
+        if not isinstance(events, list):
+            return []
+        _live_events_cache["soccer"] = (time.monotonic(), events)
+        return events
+
+
+def _parse_live_ftr(event: dict) -> dict | None:
+    """Extract the live full-time 1X2 from an in-play event's 'Fulltime Result'
+    market (labeled 'OTHER' in the live feed, unlike the prematch 'MATCH_RESULT')."""
+    for market in event.get("markets", []):
+        if (market.get("rawName") or "").strip().lower() != "fulltime result":
+            continue
+        result = {}
+        for selection in market.get("selections", []):
+            outcome = selection.get("canonicalOutcome")
+            odds = selection.get("odds")
+            if outcome in ("HOME", "DRAW", "AWAY") and odds:
+                result[outcome.lower()] = round(float(odds), 2)
+        if set(result) == {"home", "draw", "away"}:
+            return {**result, "kickoff_at": None}
+    return None
+
+
+async def fetch_live_odds(home_team: str, away_team: str) -> dict | None:
+    """Live in-play full-time 1X2 for a match, or None if it isn't currently live.
+    Used as a display-only fallback when prematch odds are gone (e.g. after kickoff)."""
+    if not settings.pulsescore_api_key or not home_team or not away_team:
+        return None
+    for event in await _fetch_live_soccer_events():
+        if _names_match(event.get("home", ""), home_team) and _names_match(event.get("away", ""), away_team):
+            return _parse_live_ftr(event)
+    return None
 
 
 async def fetch_odds(

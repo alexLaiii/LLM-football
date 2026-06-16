@@ -135,6 +135,7 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
   }, [token, fixtureId]);
 
   const oddsAvailable = Boolean(odds?.available);
+  const oddsLive = Boolean(odds?.live);
   const selectedOdds = odds && odds.available ? odds[betOn] : null;
   const stakeNum = parseFloat(stake);
   const potentialPayout = selectedOdds && stakeNum > 0 ? stakeNum * selectedOdds : null;
@@ -267,7 +268,14 @@ export default function UserBetForm({ fixtureId, homeTeam, awayTeam, homeTeamCre
     <section className="border border-[var(--term-border)] bg-[var(--term-surface)] p-[18px]">
       <Header title="PLACE WAGER" userName={user.username} />
       <form onSubmit={handleSubmit}>
-        <div className="mb-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">SELECT OUTCOME</div>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--term-muted)]">SELECT OUTCOME</span>
+          {oddsLive && (
+            <span className="inline-flex items-center gap-1.5 border border-[rgba(255,89,112,.5)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--term-neg)]" title="Prematch odds unavailable — showing live in-play odds, which move with the match">
+              <i className="h-[6px] w-[6px] animate-pulse rounded-full bg-[var(--term-neg)]" />LIVE IN-PLAY
+            </span>
+          )}
+        </div>
         <div className="mb-4 grid grid-cols-3 gap-2">
           {BET_OPTIONS.map(({ value }) => {
             const crest = value === "home" ? homeTeamCrest : value === "away" ? awayTeamCrest : null;

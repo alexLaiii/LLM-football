@@ -113,6 +113,7 @@ export type Odds = {
   away: number;
   kickoff_at: string | null;
   available: boolean;
+  live: boolean;
 };
 
 export async function getOdds(fixtureId: number): Promise<Odds | null> {
