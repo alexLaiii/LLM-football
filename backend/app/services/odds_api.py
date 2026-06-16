@@ -99,12 +99,22 @@ def _parse_live_ftr(event: dict) -> dict | None:
     return None
 
 
+def _is_virtual_event(event: dict) -> bool:
+    """Bet365's Esoccer/virtual games reuse real country names with a player
+    handle (e.g. 'Iraq (Arthur)' vs 'Norway (Viper)'), so they fuzzy-match real
+    fixtures and return garbage odds. Identify them by their league name."""
+    league = (event.get("league") or "").lower()
+    return "esoccer" in league or "e-soccer" in league or "cyber" in league
+
+
 async def fetch_live_odds(home_team: str, away_team: str) -> dict | None:
     """Live in-play full-time 1X2 for a match, or None if it isn't currently live.
     Used as a fallback when prematch odds are gone (e.g. pulled before kickoff)."""
     if not settings.pulsescore_api_key or not home_team or not away_team:
         return None
     for event in await _fetch_live_soccer_events():
+        if _is_virtual_event(event):
+            continue
         if _names_match(event.get("home", ""), home_team) and _names_match(event.get("away", ""), away_team):
             return _parse_live_ftr(event)
     return None
