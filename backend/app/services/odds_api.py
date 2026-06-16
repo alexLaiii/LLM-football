@@ -101,13 +101,41 @@ def _parse_live_ftr(event: dict) -> dict | None:
 
 async def fetch_live_odds(home_team: str, away_team: str) -> dict | None:
     """Live in-play full-time 1X2 for a match, or None if it isn't currently live.
-    Used as a display-only fallback when prematch odds are gone (e.g. after kickoff)."""
+    Used as a fallback when prematch odds are gone (e.g. pulled before kickoff)."""
     if not settings.pulsescore_api_key or not home_team or not away_team:
         return None
     for event in await _fetch_live_soccer_events():
         if _names_match(event.get("home", ""), home_team) and _names_match(event.get("away", ""), away_team):
             return _parse_live_ftr(event)
     return None
+
+
+def is_match_started(kickoff_at) -> bool:
+    dt = _parse_datetime(kickoff_at)
+    return dt is not None and dt <= datetime.now(timezone.utc)
+
+
+async def fetch_odds_with_live_fallback(
+    external_id: str,
+    home_team: str = "",
+    away_team: str = "",
+    league: str = "",
+    kickoff_at: datetime | str | None = None,
+) -> dict:
+    """Prematch odds, falling back to live in-play odds in the pre-kickoff window
+    when Bet365 has already pulled the prematch market. Returns a plain odds dict.
+    Shared by the AI prediction flow so models reason against real odds instead of
+    the _DEFAULT_ODDS placeholder when the prematch line has just been withdrawn."""
+    odds = await fetch_odds(
+        external_id, home_team=home_team, away_team=away_team, league=league, kickoff_at=kickoff_at,
+    )
+    if is_real_odds(external_id, odds):
+        return odds
+    if not external_id.startswith("mock_") and not is_match_started(kickoff_at):
+        live = await fetch_live_odds(home_team, away_team)
+        if live is not None:
+            return live
+    return odds
 
 
 async def fetch_odds(

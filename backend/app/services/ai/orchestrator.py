@@ -18,7 +18,7 @@ from app.services.ai.grok import GrokPredictor
 from app.services.ai.deepseek import DeepSeekPredictor
 from app.services.football_api import fetch_match_context
 from app.services.lineup_analyzer import analyze_lineups
-from app.services.odds_api import fetch_odds
+from app.services.odds_api import fetch_odds_with_live_fallback
 
 PREDICTORS = [
     ClaudePredictor(),
@@ -152,7 +152,7 @@ async def predict_all_in_background(
     try:
         match_context, odds, lineup_summary = await asyncio.gather(
             fetch_match_context(external_id),
-            fetch_odds(
+            fetch_odds_with_live_fallback(
                 external_id,
                 home_team=fixture_dict["home_team"],
                 away_team=fixture_dict["away_team"],
@@ -196,7 +196,7 @@ async def run_predictions(fixture: Fixture, db: Session) -> list[Prediction]:
 
     match_context, odds, lineup_summary = await asyncio.gather(
         fetch_match_context(fixture.external_id),
-        fetch_odds(
+        fetch_odds_with_live_fallback(
             fixture.external_id,
             home_team=fixture_dict["home_team"],
             away_team=fixture_dict["away_team"],

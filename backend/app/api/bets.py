@@ -1,6 +1,5 @@
 import asyncio
 import time
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -22,6 +21,7 @@ from app.schemas import (
 )
 from app.services.ai.orchestrator import predict_all_in_background
 from app.services.auth import get_current_user
+from app.services.odds_api import is_match_started
 from app.services.odds_snapshot import fixture_odds_for_betting
 
 router = APIRouter(prefix="/bets", tags=["bets"])
@@ -89,10 +89,7 @@ async def place_bet(
     if not fixture:
         raise HTTPException(status_code=404, detail="Fixture not found")
 
-    kickoff = fixture.kickoff_at
-    if kickoff.tzinfo is None:
-        kickoff = kickoff.replace(tzinfo=timezone.utc)
-    if kickoff <= datetime.now(timezone.utc):
+    if is_match_started(fixture.kickoff_at):
         raise HTTPException(status_code=400, detail="Betting is closed: the match has already started")
 
     existing = (
