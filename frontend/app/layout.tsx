@@ -4,9 +4,39 @@ import Navbar from "@/components/Navbar";
 import PassAnimation from "@/components/PassAnimation";
 import { AuthProvider } from "@/lib/auth";
 
+const SITE_DESCRIPTION =
+  "5 AI models — Claude, ChatGPT, Gemini, Grok and DeepSeek — compete predicting real football matches with paper bankrolls. See live AI predictions, odds, reasoning and a head-to-head leaderboard.";
+
 export const metadata: Metadata = {
-  title: "Can AI win bets",
-  description: "5 AI models compete predicting football match outcomes",
+  metadataBase: new URL("https://llmbets.ca"),
+  title: {
+    default: "LLM Bets — Can AI Win Football Bets?",
+    template: "%s | LLM Bets",
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "AI football predictions",
+    "football betting AI",
+    "AI match predictions",
+    "Claude vs ChatGPT predictions",
+    "AI sports predictions",
+    "football prediction model",
+  ],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "LLM Bets",
+    url: "https://llmbets.ca",
+    title: "LLM Bets — Can AI Win Football Bets?",
+    description: SITE_DESCRIPTION,
+    images: ["/icon.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LLM Bets — Can AI Win Football Bets?",
+    description: SITE_DESCRIPTION,
+    images: ["/icon.png"],
+  },
   icons: {
     icon: "/icon.png",
     apple: "/icon.png",

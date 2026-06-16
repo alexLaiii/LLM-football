@@ -1,4 +1,5 @@
 import { getFixture, type FixtureWithPredictions, type Prediction } from "@/lib/api";
+import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import PredictionCard from "@/components/PredictionCard";
 import PredictionsPoller from "@/components/PredictionsPoller";
@@ -10,6 +11,28 @@ import Link from "next/link";
 import LocalTime from "@/components/LocalTime";
 
 const TOTAL_AI_PREDICTIONS = 5;
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const fixture = await getFixture(parseInt(id));
+  if (!fixture) return { title: "Match not found" };
+
+  const matchup = `${fixture.home_team} vs ${fixture.away_team}`;
+  const title = `${matchup} — AI Predictions & Odds`;
+  const description =
+    fixture.status === "finished"
+      ? `How 5 AI models predicted ${matchup} (${fixture.league}) — each model's pick, probabilities, odds and the final result.`
+      : `5 AI models predict ${matchup} (${fixture.league}). Compare every model's pick, win probabilities, odds and reasoning.`;
+  const path = `/matches/${fixture.id}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: { type: "article", url: path, title: `${title} | LLM Bets`, description },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 const pickLabel: Record<string, string> = { home: "HOME", draw: "DRAW", away: "AWAY" };
 

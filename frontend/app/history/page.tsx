@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { getAllFixtures, getPredictions, type Fixture } from "@/lib/api";
 import HistoryClient from "./HistoryClient";
+
+export const metadata: Metadata = {
+  title: "Prediction History & Results",
+  description:
+    "Full track record of every AI model's football predictions — bets, odds, results and profit/loss over time.",
+  alternates: { canonical: "/history" },
+};
 
 export default async function HistoryPage() {
   const [predictions, fixtures] = await Promise.all([getPredictions(), getAllFixtures()]);
