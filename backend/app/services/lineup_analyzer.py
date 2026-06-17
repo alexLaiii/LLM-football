@@ -12,6 +12,7 @@ Pipeline:
 """
 import asyncio
 import json
+from datetime import datetime, timezone
 
 import anthropic
 import httpx
@@ -22,6 +23,14 @@ from app.services.football_api import _BASE_URL, _HEADERS, _r
 _HAIKU_MODEL = "claude-haiku-4-5-20251001"
 _RECENT_FIXTURES = 5
 _HEAVY_ROTATION_THRESHOLD = 3
+# Recent-form baseline window: only fixtures within this many days count, so months-
+# old games don't pollute the "expected XI" (e.g. national teams between tournaments).
+_STALE_BASELINE_DAYS = 30
+# Rotation is only meaningful with several consistent recent games — one or two games
+# can't tell a rotated lineup from a full-strength one (a single rotated friendly would
+# make today's first XI look "rotated"). Below this many recent games, rotation is
+# reported as "unknown" and we just give the AI the confirmed XI + injuries.
+_MIN_BASELINE_GAMES = 3
 
 _SYSTEM_PROMPT = """You are a football analyst summarizing lineup strength for a betting model.
 
@@ -30,17 +39,53 @@ The input JSON contains, for each team:
 - starting_xi: confirmed startXI names
 - missing_regulars: regulars who did not start today, each with:
     - position: G / D / M / F
-    - appearances_recent: starts in their last 5 fixtures (out of 5)
+    - appearances_recent: how many of the team's recent matches the player started
     - absence_reason: "injured" | "suspended" | "benched" | "unavailable"
     - impact: "high" (top scorer or top assister) | "normal"
-- rotation: "heavy" if 3+ regulars are missing, otherwise "normal"
+- rotation: "heavy" if 3+ regulars are missing, "normal" if fewer, or "unknown"
+  when there are too few recent matches to establish a reliable first-choice XI
+  (e.g. a national team with only a stray friendly to compare against). When
+  rotation is "unknown", missing_regulars is empty — there is no usable baseline.
 
 Produce a concise 2-3 line summary covering:
 - Notable missing regulars (name, position, reason, impact)
 - Overall lineup strength (full-strength / weakened / significantly depleted)
 - Whether either team is heavily rotated
 
+If a team's rotation is "unknown", do NOT infer that it is full-strength or rotated.
+Instead state that its lineup strength can't be judged from recent form (no recent
+matches), while still reporting its confirmed starting XI and formation.
+
 Output ONLY the plain-text summary. No markdown, no headers, no JSON."""
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _recent_finished_fixture_ids(recent_response: list, match_date: datetime | None) -> list[int]:
+    """IDs of the team's recently-finished fixtures, used as the rotation baseline.
+    When the match date is known, ONLY fixtures within _STALE_BASELINE_DAYS are kept,
+    so a stale history (e.g. a national team's months-old games) can't pollute the
+    expected XI — even if one of the last few games happens to be recent. Returns []
+    when no fixture qualifies; the team then has no usable baseline (rotation
+    'unknown'). With an unknown match date, no date filter is applied (old behaviour)."""
+    ids = []
+    for f in recent_response:
+        if f["fixture"]["status"]["short"] not in ("FT", "AET", "PEN"):
+            continue
+        if match_date is not None:
+            played = _parse_iso(f["fixture"].get("date"))
+            if played is None or not (0 <= (match_date - played).days <= _STALE_BASELINE_DAYS):
+                continue
+        ids.append(f["fixture"]["id"])
+    return ids[:_RECENT_FIXTURES]
 
 
 async def analyze_lineups(external_id: str) -> str | None:
@@ -90,8 +135,17 @@ async def analyze_lineups(external_id: str) -> str | None:
                            params={"league": league_id, "season": season}),
             )
 
-            home_fixture_ids = _finished_fixture_ids(_r(home_recent_r))
-            away_fixture_ids = _finished_fixture_ids(_r(away_recent_r))
+            # Baseline = only fixtures within the recency window, so months-old games
+            # don't pollute the expected XI. A team with too few recent games has no
+            # reliable baseline (can't distinguish rotation from full strength).
+            match_date = _parse_iso(fx["fixture"].get("date"))
+            home_recent_ids = _recent_finished_fixture_ids(_r(home_recent_r), match_date)
+            away_recent_ids = _recent_finished_fixture_ids(_r(away_recent_r), match_date)
+            home_stale = len(home_recent_ids) < _MIN_BASELINE_GAMES
+            away_stale = len(away_recent_ids) < _MIN_BASELINE_GAMES
+            # Stale teams get no baseline — skip their historic lineup fetches too.
+            home_fixture_ids = [] if home_stale else home_recent_ids
+            away_fixture_ids = [] if away_stale else away_recent_ids
             scorers_data = _r(scorers_r)
             assists_data = _r(assists_r)
 
@@ -112,15 +166,15 @@ async def analyze_lineups(external_id: str) -> str | None:
         home_high_impact = _high_impact_ids(scorers_data, assists_data, home_id)
         away_high_impact = _high_impact_ids(scorers_data, assists_data, away_id)
 
-        home_missing = _build_missing_regulars(
+        home_missing = [] if home_stale else _build_missing_regulars(
             home_expected, home_xi, home_subs, injuries_data, home_id, home_high_impact,
         )
-        away_missing = _build_missing_regulars(
+        away_missing = [] if away_stale else _build_missing_regulars(
             away_expected, away_xi, away_subs, injuries_data, away_id, away_high_impact,
         )
 
-        home_rotation = "heavy" if len(home_missing) >= _HEAVY_ROTATION_THRESHOLD else "normal"
-        away_rotation = "heavy" if len(away_missing) >= _HEAVY_ROTATION_THRESHOLD else "normal"
+        home_rotation = "unknown" if home_stale else ("heavy" if len(home_missing) >= _HEAVY_ROTATION_THRESHOLD else "normal")
+        away_rotation = "unknown" if away_stale else ("heavy" if len(away_missing) >= _HEAVY_ROTATION_THRESHOLD else "normal")
 
         structured = {
             "home_team": home_name,
@@ -181,40 +235,39 @@ def _formation_quota(formation: str) -> dict[str, int]:
         return dict(_DEFAULT_QUOTA)
 
 
-def _finished_fixture_ids(recent_response: list) -> list[int]:
-    ids = []
-    for f in recent_response:
-        if f["fixture"]["status"]["short"] in ("FT", "AET", "PEN"):
-            ids.append(f["fixture"]["id"])
-    return ids[:_RECENT_FIXTURES]
-
-
 def _build_expected_xi(historic_lineups: list, team_id: int, formation: str) -> list[dict]:
-    """Tally startXI appearances per player across recent fixtures, bucketed by position."""
+    """Each team's first-choice XI, inferred from recent startXI appearances and
+    bucketed by today's formation. A player only counts as a "regular" if he started
+    a majority of the recent games — this keeps one-off starters (who'd otherwise fill
+    a thin position bucket and be falsely flagged as "missing" when rested) out."""
     quota = _formation_quota(formation)
     counters: dict[str, dict[int, dict]] = {pos: {} for pos in _POSITION_KEYS}
+    total_games = 0
     for lineup_response in historic_lineups:
-        for lineup in lineup_response:
-            if lineup["team"]["id"] != team_id:
+        team_started_xi = [
+            p
+            for lineup in lineup_response if lineup["team"]["id"] == team_id
+            for p in lineup.get("startXI", [])
+        ]
+        if not team_started_xi:
+            continue
+        total_games += 1
+        for p in team_started_xi:
+            pid = p["player"]["id"]
+            pos = p["player"].get("pos", "")
+            if pos not in counters:
                 continue
-            for p in lineup.get("startXI", []):
-                pid = p["player"]["id"]
-                pos = p["player"].get("pos", "")
-                if pos not in counters:
-                    continue
-                bucket = counters[pos]
-                if pid not in bucket:
-                    bucket[pid] = {
-                        "id": pid,
-                        "name": p["player"]["name"],
-                        "position": pos,
-                        "appearances": 0,
-                    }
-                bucket[pid]["appearances"] += 1
+            bucket = counters[pos]
+            if pid not in bucket:
+                bucket[pid] = {"id": pid, "name": p["player"]["name"], "position": pos, "appearances": 0}
+            bucket[pid]["appearances"] += 1
 
+    # Regular = started a strict majority of the recent games (e.g. 2 of 3, 3 of 5).
+    min_starts = total_games // 2 + 1
     expected: list[dict] = []
     for pos in _POSITION_KEYS:
-        ranked = sorted(counters[pos].values(), key=lambda p: p["appearances"], reverse=True)
+        regulars = [p for p in counters[pos].values() if p["appearances"] >= min_starts]
+        ranked = sorted(regulars, key=lambda p: p["appearances"], reverse=True)
         expected.extend(ranked[:quota.get(pos, 0)])
     return expected
 
