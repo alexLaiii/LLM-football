@@ -33,6 +33,16 @@ def _migrate():
         conn.execute(text(
             "ALTER TABLE teams ADD COLUMN IF NOT EXISTS crest VARCHAR(500)"
         ))
+        # Idempotency backstop: at most one prediction per (fixture, model/mode),
+        # so concurrent triggers can't create duplicate rows. Wrapped so a legacy
+        # table with pre-existing duplicates can't block startup.
+        try:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_predictions_fixture_model "
+                "ON predictions (fixture_id, model_name)"
+            ))
+        except Exception:
+            pass
         conn.commit()
 
 

@@ -3,14 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import type { Prediction } from "@/lib/api";
 import ModelIcon from "@/components/ModelIcon";
-
-const MODEL_LABELS: Record<string, string> = {
-  claude: "Claude",
-  gpt5: "ChatGPT",
-  gemini: "Gemini",
-  grok: "Grok",
-  deepseek: "DeepSeek",
-};
+import { baseModel, modelLabel } from "@/lib/models";
 
 const MODEL_ACCENTS: Record<string, string> = {
   claude: "#4169a1",
@@ -103,8 +96,8 @@ function valueScore(prediction: Prediction, side: Outcome) {
 
 export default function PredictionCard({ prediction }: { prediction: Prediction }) {
   const [expanded, setExpanded] = useState(false);
-  const label = MODEL_LABELS[prediction.model_name] ?? prediction.model_name;
-  const accent = MODEL_ACCENTS[prediction.model_name] ?? "var(--term-cyan)";
+  const label = modelLabel(prediction.model_name);
+  const accent = MODEL_ACCENTS[baseModel(prediction.model_name)] ?? "var(--term-cyan)";
   const badge = statusBadge(prediction);
   const mock = isMockPrediction(prediction);
   const pick = pickLabel[prediction.bet_on] ?? prediction.bet_on.toUpperCase();

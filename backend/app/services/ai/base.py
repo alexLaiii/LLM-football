@@ -61,6 +61,36 @@ TASK_STEPS = """1. Judge the relative strength of the two teams from the match c
 
 Do NOT choose a bet, and do NOT compute value scores or expected value — that is handled deterministically in code from your probabilities. Focus only on producing a well-calibrated probability estimate."""
 
+# ---------------------------------------------------------------------------
+# Blind prompt building blocks.
+#
+# Identical task to the originals EXCEPT the model never sees, and is never told
+# about, the bookmaker odds. The blind text deliberately mentions no odds,
+# market, price, implied probability, value, or expected value. After the model
+# returns its probabilities, the same deterministic code path (make_result)
+# applies the real odds to pick the bet, size the stake, and settle later.
+# ---------------------------------------------------------------------------
+ROLE_BLIND = (
+    "You are a football match prediction analyst. Using only the match information "
+    "provided, independently estimate the TRUE probability of each outcome (home win, "
+    "draw, away win) as accurately and honestly as you can. A separate system turns your "
+    "probabilities into a decision, so your only job is a well-calibrated probability "
+    "estimate."
+)
+
+TASK_STEPS_BLIND = """1. Judge the relative strength of the two teams from the match context (form, standings, lineups, injuries, rest days, H2H, home/away splits).
+2. Independently estimate the true probability of each outcome from the match context alone.
+3. Output your true probability for each outcome as home_prob, draw_prob, away_prob. They must sum to 1.00.
+4. Give a short reasoning for the key factors behind your estimate, plus an overall confidence in it.
+
+Focus only on producing a well-calibrated probability estimate from the match context."""
+
+OUTPUT_RULES_BLIND = """- home_prob + draw_prob + away_prob must sum to 1.00 after rounding to 2 decimal places.
+- Each probability must be a decimal between 0 and 1.
+- confidence must be between 0.35 and 0.95.
+- reasoning must be 1-2 sentences on the key factors behind the probabilities.
+- Do not include markdown, extra keys, calculations, or any text outside the JSON."""
+
 JSON_EXAMPLE = """{
   "reasoning": "Brief explanation of the key factors behind these probabilities.",
   "home_prob": 0.45,
@@ -134,6 +164,26 @@ def build_user_message(fixture: dict, odds: dict, match_context: dict) -> str:
     return msg
 
 
+def build_blind_match_data(fixture: dict, match_context: dict) -> str:
+    """The match data block for blind predictions — identical to the original's
+    non-odds content, with the Odds line removed. Used by all blind predictors."""
+    return (
+        f"Match: {fixture['home_team']} vs {fixture['away_team']}\n"
+        f"League: {fixture['league']}\n"
+        f"Context: {json.dumps(match_context)}"
+    )
+
+
+def build_blind_user_message(fixture: dict, match_context: dict) -> str:
+    """Shared blind user message. Same context (and WC rules) as the original
+    user message, but never contains the bookmaker odds."""
+    msg = build_blind_match_data(fixture, match_context)
+    rules = world_cup_rules(fixture)
+    if rules:
+        msg += f"\n{rules}"
+    return msg
+
+
 @dataclass
 class PredictionResult:
     model_name: str
@@ -152,8 +202,14 @@ class PredictionResult:
 
 
 class BasePredictor(ABC):
-    name: str
+    base_name: str           # provider identity, e.g. "claude"
     initial_bankroll: float = 20_000.0
+
+    def __init__(self, blind: bool = False):
+        # One predictor class serves both modes; the only differences are the
+        # identity it records and which (odds-aware vs blind) prompt it sends.
+        self.blind = blind
+        self.name = f"{self.base_name}_blind" if blind else self.base_name
 
     @abstractmethod
     async def predict(

@@ -9,9 +9,31 @@ const START_BANKROLL = 20_000;
 const MINUS = "−";
 const MARK_HUES: Record<string, number> = { claude: 18, gpt5: 158, gemini: 220, grok: 330, deepseek: 248 };
 
-type FilterKind = "all" | "ai" | "human";
+type FilterKind = "all" | "ai" | "human" | "all_blind" | "ai_blind";
 type SortKey = "rank" | "name" | "form" | "type" | "bankroll" | "pl" | "roi" | "win" | "record";
 type SortDir = "asc" | "desc";
+
+// Which competitors belong to each filter. "ALL"/"AI" exclude blind models to
+// preserve the original board; the two blind filters surface them explicitly.
+const FILTERS: [FilterKind, string][] = [
+  ["all", "ALL"],
+  ["ai", "AI"],
+  ["human", "HUMANS"],
+  ["all_blind", "ALL (WITH AI BLIND)"],
+  ["ai_blind", "AI (BLIND)"],
+];
+
+function inPopulation(competitor: LeaderboardEntry, filter: FilterKind): boolean {
+  const blind = !!competitor.blind;
+  const ai = competitor.kind === "ai";
+  switch (filter) {
+    case "all": return competitor.kind === "user" || (ai && !blind);
+    case "ai": return ai && !blind;
+    case "human": return competitor.kind === "user";
+    case "all_blind": return true;
+    case "ai_blind": return ai && blind;
+  }
+}
 
 const fmtMoney = (n: number, signed = false, decimals = 2) => {
   const body = "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -168,10 +190,15 @@ export default function LeaderboardTable({ data, loading = false, flashSet = {} 
   const [sortKey, setSortKey] = useState<SortKey>("bankroll");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const counts = useMemo(() => ({ all: data.length, ai: data.filter((c) => c.kind === "ai").length, human: data.filter((c) => c.kind === "user").length }), [data]);
-  const ranks = useMemo(() => Object.fromEntries([...data].sort((a, b) => b.bankroll - a.bankroll).map((c, i) => [c.name, i + 1])), [data]);
+  const counts = useMemo(
+    () => Object.fromEntries(FILTERS.map(([key]) => [key, data.filter((c) => inPopulation(c, key)).length])) as Record<FilterKind, number>,
+    [data],
+  );
+  // Ranks are recomputed over the selected filter's population so visible ranks
+  // are 1..N for what's shown, never preserving hidden entries' numbers.
+  const filtered = useMemo(() => data.filter((c) => inPopulation(c, filter)), [data, filter]);
+  const ranks = useMemo(() => Object.fromEntries([...filtered].sort((a, b) => b.bankroll - a.bankroll).map((c, i) => [c.name, i + 1])), [filtered]);
   const visible = useMemo(() => {
-    const filtered = filter === "all" ? data : data.filter((c) => filter === "ai" ? c.kind === "ai" : c.kind === "user");
     const value = (c: LeaderboardEntry): number | string => {
       switch (sortKey) {
         case "rank": return ranks[c.name];
@@ -190,7 +217,7 @@ export default function LeaderboardTable({ data, loading = false, flashSet = {} 
       if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
       return sortDir === "asc" ? av - (bv as number) : (bv as number) - av;
     });
-  }, [data, filter, ranks, sortDir, sortKey]);
+  }, [filtered, ranks, sortDir, sortKey]);
 
   function sortBy(key: SortKey) {
     if (sortKey === key) setSortDir((dir) => dir === "asc" ? "desc" : "asc");
@@ -204,7 +231,7 @@ export default function LeaderboardTable({ data, loading = false, flashSet = {} 
     <section className="terminal-board">
       <div className="terminal-board-top">
         <div className="terminal-tabs" role="tablist">
-          {([["all", "ALL"], ["ai", "AI"], ["human", "HUMANS"]] as [FilterKind, string][]).map(([key, label]) => (
+          {FILTERS.map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}>
               {label}<span>{counts[key]}</span>
             </button>

@@ -9,20 +9,26 @@ from app.services.ai.base import (
     BasePredictor,
     PredictionResult,
     build_match_data,
+    build_blind_match_data,
     world_cup_rules,
     extract_json,
     make_result,
     random_probs,
     ROLE,
+    ROLE_BLIND,
     CONTEXT_GLOSSARY,
     TASK_STEPS,
+    TASK_STEPS_BLIND,
     JSON_EXAMPLE,
     OUTPUT_RULES,
+    OUTPUT_RULES_BLIND,
 )
 
-# Claude responds best to clearly delimited XML sections.
-SYSTEM_PROMPT = f"""<role>
-{ROLE}
+
+def _system_prompt(role: str, task: str, rules: str) -> str:
+    # Claude responds best to clearly delimited XML sections.
+    return f"""<role>
+{role}
 </role>
 
 <context_fields>
@@ -30,7 +36,7 @@ SYSTEM_PROMPT = f"""<role>
 </context_fields>
 
 <task>
-{TASK_STEPS}
+{task}
 </task>
 
 <output_format>
@@ -39,19 +45,28 @@ Respond with a single JSON object, and nothing else, in exactly this shape:
 </output_format>
 
 <rules>
-{OUTPUT_RULES}
+{rules}
 </rules>"""
 
 
+SYSTEM_PROMPT = _system_prompt(ROLE, TASK_STEPS, OUTPUT_RULES)
+SYSTEM_PROMPT_BLIND = _system_prompt(ROLE_BLIND, TASK_STEPS_BLIND, OUTPUT_RULES_BLIND)
+
+
 class ClaudePredictor(BasePredictor):
-    name = "claude"
+    base_name = "claude"
 
     async def predict(self, fixture, match_context, odds, current_bankroll) -> PredictionResult:
         from app.config import settings
         if settings.anthropic_api_key:
             try:
                 client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-                content = f"<match_data>\n{build_match_data(fixture, odds, match_context)}\n</match_data>"
+                # Blind mode never puts odds in the prompt; the odds-aware mode does.
+                match_data = (
+                    build_blind_match_data(fixture, match_context) if self.blind
+                    else build_match_data(fixture, odds, match_context)
+                )
+                content = f"<match_data>\n{match_data}\n</match_data>"
                 # Keep World Cup guidance in its own tag rather than mixed into
                 # the match data, preserving the clean instruction/data split.
                 wc_rules = world_cup_rules(fixture).strip()
@@ -63,7 +78,7 @@ class ClaudePredictor(BasePredictor):
                     # Cache the (large, static) system prompt across calls.
                     system=[{
                         "type": "text",
-                        "text": SYSTEM_PROMPT,
+                        "text": SYSTEM_PROMPT_BLIND if self.blind else SYSTEM_PROMPT,
                         "cache_control": {"type": "ephemeral"},
                     }],
                     messages=[{"role": "user", "content": content}],

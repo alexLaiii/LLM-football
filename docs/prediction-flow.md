@@ -2,15 +2,34 @@
 
 How one fixture goes from "user places a bet" to "5 AI models have settled predictions". Read this before editing anything in [services/ai/](../backend/app/services/ai/) or [services/football_api.py](../backend/app/services/football_api.py).
 
+## Two modes: original (odds-aware) and blind
+
+Every fixture is predicted by all five providers in **two modes**, for **ten prediction rows total**:
+
+- **Original (bookmaker-aware).** The LLM sees the match context *and* the bookmaker odds as a market reference. Identities: `claude`, `gpt5`, `gemini`, `grok`, `deepseek`. Behaves exactly as before.
+- **Blind.** The LLM sees the same non-odds context (form, standings, lineups, injuries, ratings, WC rules) but **never the odds** — not in the system prompt, user message, snapshot, or logs. It only returns probabilities. Identities: `claude_blind`, `gpt5_blind`, … `deepseek_blind`, displayed as "Claude (blind)", etc.
+
+"Blind" means the *LLM* can't see odds. After the blind model returns its probabilities, the **same deterministic code** (`make_result` in [ai/base.py](../backend/app/services/ai/base.py)) applies the real odds to compute value/EV, pick the highest-EV outcome, size the stake, store the selected odds, and settle later. So a blind row still has `odds`/`odds_home/draw/away` columns — they're just absent from its `prompt_snapshot`.
+
+**Storage: separate table.** Original predictions live in `predictions` ([models/prediction.py](../backend/app/models/prediction.py)); blind predictions live in a parallel `blind_predictions` table ([models/prediction_blind.py](../backend/app/models/prediction_blind.py)) with identical columns. This keeps them easy to find, export, or delete independently, and mirrors how `user_bets` and `predictions` are merged into one leaderboard. `prediction_class(model_name)` in [orchestrator.py](../backend/app/services/ai/orchestrator.py) is the single place that maps a `*_blind` identity to its table; `get_bankroll`, the leaderboard, performance, and settlement all go through it. The fixture API exposes the two sets as `predictions` and `blind_predictions`.
+
+The identity/label/list constants live in one place: [services/ai/models.py](../backend/app/services/ai/models.py) (`ORIGINAL_MODELS`, `BLIND_MODELS`, `ALL_MODELS`, `EXPECTED_PREDICTIONS_PER_FIXTURE`, `MODEL_LABELS`, `missing_models()`). A blind model's bankroll is fully independent of its original counterpart — different table, and everything keys on `model_name`.
+
 ## What triggers predictions
 
-Predictions are triggered **once per fixture**, the first time a user places a bet on it. The handler in [api/bets.py:128-142](../backend/app/api/bets.py#L128) checks if any `Prediction` row exists for the fixture; if not, it kicks off the AI fan-out as a background task and returns the user's bet immediately.
+Predictions are triggered the first time a user places a bet on a fixture. The handler in [api/bets.py](../backend/app/api/bets.py) triggers the background fan-out whenever **any** of the ten model/mode combinations is missing (`ALL_MODELS ⊄ existing`).
+
+Triggering is **idempotent**: the orchestrator computes `missing_models(existing)` and runs only the gaps. So:
+- A brand-new fixture generates all ten.
+- A historical fixture that only has the original five safely backfills just the blind five on the next bet.
+- Repeated or concurrent triggers never duplicate — a unique `(fixture_id, model_name)` index is the backstop, and each row is saved independently.
+- A fixture is **not** treated as complete just because one (or five) predictions exist.
 
 This means:
 - If no user ever bets on a fixture, the AI models never predict it. By design — we don't want to waste API quota on matches nobody cares about.
-- If 100 users bet on the same match, only the first user's bet triggers the AI run. Everyone else just gets the cached predictions.
+- If 100 users bet on the same match, only the gaps are ever generated; everyone else just gets the cached predictions.
 
-The frontend polls `/fixtures/{id}` every 2 seconds via [PredictionsPoller](../frontend/components/PredictionsPoller.tsx) until all 5 predictions are present or a 180s cap is hit.
+The frontend polls `/fixtures/{id}` every 2 seconds via [PredictionsPoller](../frontend/components/PredictionsPoller.tsx) until all ten predictions are present (`EXPECTED_PREDICTIONS_PER_FIXTURE`) or a 10-minute cap is hit. Completed results render progressively; the match page's "Fully decided by model" toggle switches the displayed set between the five original and five blind cards (display-only — it triggers nothing).
 
 ## The orchestrator
 
@@ -222,10 +241,10 @@ if fixture.status == "scheduled" and fixture.kickoff_at < now:
    - Implement `async def predict(...)` returning a `PredictionResult`.
    - Implement `_mock()` for offline dev.
 2. Add it to the `PREDICTORS` list in [orchestrator.py:22](../backend/app/services/ai/orchestrator.py#L22).
-3. Add the model name to `_AI_MODELS` and `_AI_LABELS` in [api/bets.py:28](../backend/app/api/bets.py#L28) and to `_MODELS` in [api/performance.py:10](../backend/app/api/performance.py#L10).
+3. Add the model name to `ORIGINAL_MODELS` (and the base label map) in [services/ai/models.py](../backend/app/services/ai/models.py) — `BLIND_MODELS`, `ALL_MODELS`, `EXPECTED_PREDICTIONS_PER_FIXTURE`, and the leaderboard/performance lists all derive from it. Register both an original and a `blind=True` instance in `PREDICTORS` ([orchestrator.py](../backend/app/services/ai/orchestrator.py)). Give the provider a `SYSTEM_PROMPT_BLIND` built from `ROLE_BLIND`/`TASK_STEPS_BLIND`/`OUTPUT_RULES_BLIND` and have `predict()` branch on `self.blind`.
 4. Add the API key field to [config.py](../backend/app/config.py) and `.env.example`.
-5. Frontend: add the model name → display name in [`AI_LABEL`](../frontend/app/compare/page.tsx#L9) (and the equivalent in `HistoryClient.tsx`).
-6. Bump the `TOTAL_AI_PREDICTIONS` constant in [app/matches/[id]/page.tsx](../frontend/app/matches/[id]/page.tsx) so the poller waits for the new model.
+5. Frontend: add the base model name → display name in [lib/models.ts](../frontend/lib/models.ts) (`modelLabel` handles the "(blind)" suffix), plus the icon in [ModelIcon.tsx](../frontend/components/ModelIcon.tsx) and the per-page model lists in `compare/page.tsx` and `HistoryClient.tsx`.
+6. The match-page poller derives its target from `EXPECTED_PREDICTIONS_PER_FIXTURE`/`TOTAL_AI_PREDICTIONS_PER_MODE` in [lib/models.ts](../frontend/lib/models.ts), so no per-model constant bump is needed.
 
 ## Testing end-to-end locally
 

@@ -1316,7 +1316,7 @@ body:has(.terminal-page) .pass-anim { display: none; }
 
 .terminal-board { overflow: hidden; border: 1px solid var(--term-border); border-radius: 6px; background: var(--term-surface); }
 .terminal-board-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--term-border); }
-.terminal-tabs { display: inline-flex; overflow: hidden; border: 1px solid var(--term-border-2); border-radius: 3px; }
+.terminal-tabs { display: inline-flex; flex-wrap: wrap; overflow: hidden; border: 1px solid var(--term-border-2); border-radius: 3px; }
 .terminal-tabs button {
   display: inline-flex;
   align-items: center;

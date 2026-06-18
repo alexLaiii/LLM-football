@@ -1,3 +1,5 @@
+import { baseModel } from "@/lib/models";
+
 const MODEL_ICON_SRC: Record<string, string> = {
   claude: "/animations/claude-ai-icon.png",
   gpt5: "/animations/chatgpt-icon.png",
@@ -13,7 +15,8 @@ type Props = {
 };
 
 export function modelIconSrc(model: string) {
-  return MODEL_ICON_SRC[model] ?? null;
+  // Blind identities (e.g. "claude_blind") reuse the base model's icon.
+  return MODEL_ICON_SRC[baseModel(model)] ?? null;
 }
 
 export default function ModelIcon({ model, label, className = "h-full w-full" }: Props) {

@@ -94,13 +94,14 @@ for fixture in (Fixture.status == "scheduled" AND Fixture.kickoff_at < now):
 
 `GET /bets/leaderboard` → [api/bets.py:147](../backend/app/api/bets.py#L147).
 
-Returns a flat list of entries, each with a `kind` of `"ai"` or `"user"`:
+Returns a flat list of entries, each with a `kind` of `"ai"` or `"user"`. AI entries cover **both** the original five (from the `predictions` table) and the five blind models (`blind: true`, from the `blind_predictions` table); `prediction_class()` picks the table per identity. Compare-to-AI reads only `predictions`, so blind never enters it:
 
 ```typescript
 {
   kind: "ai" | "user",
-  name: string,           // "claude" | "gpt5" | ... | <username>
-  display_name: string,   // "Claude" | "ChatGPT" | ... | <username>
+  name: string,           // "claude" | "claude_blind" | ... | <username>
+  display_name: string,   // "Claude" | "Claude (blind)" | ... | <username>
+  blind: boolean,         // true for blind AI identities; false for originals/humans
   bankroll: number,       // computed = INITIAL_BANKROLL + total_pl − pending_staked
   total_bets: number,
   won: number,
@@ -114,6 +115,8 @@ Returns a flat list of entries, each with a `kind` of `"ai"` or `"user"`:
 
 The frontend sorts by `bankroll` descending. Users with zero bets still show up at $20,000 since the computation is `INITIAL_BANKROLL + 0`.
 
+The board is **one component** with five client-side filter tabs ([LeaderboardTable.tsx](../frontend/components/LeaderboardTable.tsx)): `ALL` (humans + original AI, excludes blind — the default, preserving prior behavior), `AI` (original five only), `HUMANS`, `ALL (WITH AI BLIND)` (everyone), and `AI (BLIND)` (the five blind models). Visible ranks are recomputed over the selected filter's population, so a filtered view is ranked 1..N rather than showing global ranks. The home dashboard's hero stats and ticker use the default (non-blind) population.
+
 ## "Compare Me to AI"
 
 `GET /bets/me/compare` → [api/bets.py:200](../backend/app/api/bets.py#L200) — auth required.
@@ -123,7 +126,7 @@ For the logged-in user, returns:
 - Each match's `user_bet` row + the array of AI `predictions` for that same match.
 - A summary block: aggregate user P&L vs. **mean AI P&L** across the same fixtures, win rates, count of matches.
 
-The "mean AI P&L" is computed as `sum_of_ai_pl / len(_AI_MODELS)`, not `/ len(ai_preds_seen)`. This is intentional — it means a match where the AI fan-out failed for 2 of 5 models still divides by 5, dragging the average down slightly. If you want to change this, change the constant in [api/bets.py:255](../backend/app/api/bets.py#L255), but be aware the frontend leaderboard already weights AI bankrolls per-model so the inconsistency is small.
+The "mean AI P&L" is computed as `sum_of_ai_pl / len(_AI_MODELS)` (= 5, the original five), not `/ len(ai_preds_seen)`. This is intentional — it means a match where the AI fan-out failed for 2 of 5 models still divides by 5, dragging the average down slightly. Blind predictions never enter this average because they live in a separate `blind_predictions` table and the compare query only reads `predictions`. If you want to change this, see [api/bets.py](../backend/app/api/bets.py).
 
 The frontend page lives at [app/compare/page.tsx](../frontend/app/compare/page.tsx) and is paginated client-side with `PAGE_SIZE=15`.
 

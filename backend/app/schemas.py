@@ -84,7 +84,8 @@ class PredictionOut(BaseModel):
 
 
 class FixtureWithPredictions(FixtureOut):
-    predictions: list[PredictionOut] = []
+    predictions: list[PredictionOut] = []          # original bookmaker-aware models
+    blind_predictions: list[PredictionOut] = []    # blind models (separate table)
 
 
 class ModelPerformance(BaseModel):
@@ -159,8 +160,9 @@ class LeaderboardEntry(BaseModel):
     model_config = {"protected_namespaces": ()}
 
     kind: Literal["ai", "user"]
-    name: str           # e.g. "claude" or "Sir Kim"
-    display_name: str   # e.g. "Claude" or "Sir Kim"
+    name: str           # e.g. "claude", "claude_blind", or "Sir Kim"
+    display_name: str   # e.g. "Claude", "Claude (blind)", or "Sir Kim"
+    blind: bool = False  # True for blind AI identities; false for originals/humans
     bankroll: float
     total_bets: int
     won: int

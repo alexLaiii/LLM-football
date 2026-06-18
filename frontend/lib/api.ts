@@ -89,7 +89,9 @@ export type Prediction = {
   away_value_score: number | null;
 };
 
-export type FixtureWithPredictions = Fixture & { predictions: Prediction[] };
+// `predictions` holds the original bookmaker-aware models; `blind_predictions`
+// holds the blind models (stored in a separate backend table).
+export type FixtureWithPredictions = Fixture & { predictions: Prediction[]; blind_predictions: Prediction[] };
 
 export async function getFixtures(): Promise<Fixture[]> {
   try {
@@ -266,6 +268,7 @@ export type LeaderboardEntry = {
   kind: "ai" | "user";
   name: string;
   display_name: string;
+  blind?: boolean;   // true for blind AI identities (e.g. "claude_blind")
   bankroll: number;
   total_bets: number;
   won: number;

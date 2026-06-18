@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.fixture import Fixture
 from app.models.prediction import Prediction
+from app.models.prediction_blind import BlindPrediction
 from app.models.user import User
 from app.models.user_bet import UserBet
 from app.schemas import (
@@ -19,7 +20,8 @@ from app.schemas import (
     UserBetInput,
     UserBetOut,
 )
-from app.services.ai.orchestrator import predict_all_in_background
+from app.services.ai.models import ALL_MODELS, ORIGINAL_MODELS, is_blind, label_for
+from app.services.ai.orchestrator import predict_all_in_background, prediction_class
 from app.services.auth import get_current_user
 from app.services.odds_api import is_match_started
 from app.services.odds_snapshot import fixture_odds_for_betting
@@ -27,14 +29,10 @@ from app.services.odds_snapshot import fixture_odds_for_betting
 router = APIRouter(prefix="/bets", tags=["bets"])
 
 INITIAL_BANKROLL = 20_000.0
-_AI_MODELS = ["claude", "gpt5", "gemini", "grok", "deepseek"]
-_AI_LABELS = {
-    "claude": "Claude",
-    "gpt5": "ChatGPT",
-    "gemini": "Gemini",
-    "grok": "Grok",
-    "deepseek": "DeepSeek",
-}
+# Compare-to-AI is defined against the original five only (they live in the
+# `predictions` table). The leaderboard additionally lists the blind five from
+# the `blind_predictions` table; the client filters which population is shown.
+_AI_MODELS = ORIGINAL_MODELS
 
 
 def _user_bankroll(user_id: int, db: Session) -> float:
@@ -126,13 +124,18 @@ async def place_bet(
     db.commit()
     db.refresh(bet)
 
-    # Only trigger AI predictions for this fixture once — reuse if any already exist.
-    ai_exists = (
-        db.query(Prediction)
-        .filter(Prediction.fixture_id == fixture.id)
-        .first()
-    )
-    if not ai_exists:
+    # Trigger AI predictions only when some model/mode combination is still
+    # missing. The background task itself generates only the gaps, so this is
+    # safe for fixtures with just the original five (it backfills the blind five)
+    # and a no-op once all ten exist.
+    existing_models = {
+        name for (name,) in
+        db.query(Prediction.model_name).filter(Prediction.fixture_id == fixture.id).all()
+    } | {
+        name for (name,) in
+        db.query(BlindPrediction.model_name).filter(BlindPrediction.fixture_id == fixture.id).all()
+    }
+    if not set(ALL_MODELS).issubset(existing_models):
         fixture_dict = {
             "external_id": fixture.external_id,
             "home_team": fixture.home_team,
@@ -172,9 +175,10 @@ def leaderboard(db: Session = Depends(get_db)):
 
     entries: list[LeaderboardEntry] = []
 
-    # AI models
-    for model in _AI_MODELS:
-        rows = db.query(Prediction).filter(Prediction.model_name == model).all()
+    # AI models — originals from `predictions`, blind from `blind_predictions`.
+    for model in ALL_MODELS:
+        Model = prediction_class(model)
+        rows = db.query(Model).filter(Model.model_name == model).all()
         settled = [r for r in rows if r.status in ("won", "lost")]
         won = sum(1 for r in settled if r.status == "won")
         lost = len(settled) - won
@@ -184,7 +188,8 @@ def leaderboard(db: Session = Depends(get_db)):
         entries.append(LeaderboardEntry(
             kind="ai",
             name=model,
-            display_name=_AI_LABELS.get(model, model),
+            display_name=label_for(model),
+            blind=is_blind(model),
             bankroll=round(INITIAL_BANKROLL + total_pl - pending_staked, 2),
             total_bets=len(rows),
             won=won,
@@ -250,6 +255,8 @@ def compare_me_to_ai(
         fixture = db.query(Fixture).filter(Fixture.id == bet.fixture_id).first()
         if not fixture:
             continue
+        # Compare-to-AI is the original five only; they live in `predictions`,
+        # so blind predictions (separate table) are naturally excluded.
         ai_preds = (
             db.query(Prediction)
             .filter(Prediction.fixture_id == bet.fixture_id)

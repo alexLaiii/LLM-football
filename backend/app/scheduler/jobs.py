@@ -3,8 +3,25 @@ from datetime import datetime, timezone
 from app.database import SessionLocal
 from app.models.fixture import Fixture
 from app.models.prediction import Prediction
+from app.models.prediction_blind import BlindPrediction
 from app.models.user_bet import UserBet
 from app.services.football_api import fetch_result, fetch_upcoming_fixtures
+
+
+def _settle_pending(db, Model, fixture_id, outcome, now):
+    """Settle every pending wager of one kind (Prediction / BlindPrediction /
+    UserBet) for a fixture. All three share bet_on/status/stake/odds/profit_loss."""
+    for row in db.query(Model).filter(
+        Model.fixture_id == fixture_id,
+        Model.status == "pending",
+    ).all():
+        if row.bet_on == outcome:
+            row.status = "won"
+            row.profit_loss = round(row.stake * (row.odds - 1), 2)
+        else:
+            row.status = "lost"
+            row.profit_loss = -row.stake
+        row.settled_at = now
 
 
 async def job_sync_fixtures():
@@ -50,29 +67,10 @@ async def job_settle_matches():
             fixture.away_goals = result.get("away_goals")
 
             now = datetime.now(timezone.utc)
-            for pred in db.query(Prediction).filter(
-                Prediction.fixture_id == fixture.id,
-                Prediction.status == "pending",
-            ).all():
-                if pred.bet_on == result["outcome"]:
-                    pred.status = "won"
-                    pred.profit_loss = round(pred.stake * (pred.odds - 1), 2)
-                else:
-                    pred.status = "lost"
-                    pred.profit_loss = -pred.stake
-                pred.settled_at = now
-
-            for bet in db.query(UserBet).filter(
-                UserBet.fixture_id == fixture.id,
-                UserBet.status == "pending",
-            ).all():
-                if bet.bet_on == result["outcome"]:
-                    bet.status = "won"
-                    bet.profit_loss = round(bet.stake * (bet.odds - 1), 2)
-                else:
-                    bet.status = "lost"
-                    bet.profit_loss = -bet.stake
-                bet.settled_at = now
+            outcome = result["outcome"]
+            _settle_pending(db, Prediction, fixture.id, outcome, now)
+            _settle_pending(db, BlindPrediction, fixture.id, outcome, now)
+            _settle_pending(db, UserBet, fixture.id, outcome, now)
 
             db.commit()
     finally:

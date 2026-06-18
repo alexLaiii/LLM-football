@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.prediction import Prediction
 from app.schemas import ModelPerformance
+from app.services.ai.models import ALL_MODELS
+from app.services.ai.orchestrator import prediction_class
 
 router = APIRouter(prefix="/performance", tags=["performance"])
 
-_MODELS = ["claude", "gpt5", "gemini", "grok", "deepseek"]
+# Original five plus their blind counterparts; each tracked independently,
+# originals in `predictions` and blind in `blind_predictions`.
+_MODELS = ALL_MODELS
 _INITIAL_BANKROLL = 20_000.0
 
 
@@ -15,7 +18,8 @@ _INITIAL_BANKROLL = 20_000.0
 def get_performance(db: Session = Depends(get_db)):
     results = []
     for model in _MODELS:
-        rows = db.query(Prediction).filter(Prediction.model_name == model).all()
+        Model = prediction_class(model)
+        rows = db.query(Model).filter(Model.model_name == model).all()
         settled = [r for r in rows if r.status in ("won", "lost")]
         won = sum(1 for r in settled if r.status == "won")
         lost = len(settled) - won

@@ -134,7 +134,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialMode = "log
                   required
                   minLength={3}
                   maxLength={24}
-                  pattern="[A-Za-z0-9_-]{3,24}"
+                  pattern="[A-Za-z0-9_\-]{3,24}"
                   title="Use 3-24 letters, numbers, underscores, or hyphens."
                   autoFocus
                   className="mt-1.5 w-full rounded-md border border-wc-border bg-white px-3 py-2.5 text-sm text-wc-ink shadow-sm outline-none transition focus:border-pos focus:ring-2 focus:ring-pos/20"

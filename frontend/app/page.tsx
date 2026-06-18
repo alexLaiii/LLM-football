@@ -58,7 +58,9 @@ export default function DashboardPage() {
     const load = async () => {
       const rows = await getLeaderboard();
       if (cancelled) return;
-      const ranks = ranksOf(rows);
+      // Rank flashing tracks the default board (humans + original AI), so blind
+      // models don't shift everyone's numbers when they're hidden by default.
+      const ranks = ranksOf(rows.filter((row) => !row.blind));
       const flashed = Object.fromEntries(Object.entries(ranks).filter(([name, rank]) => prevRanks.current[name] !== undefined && prevRanks.current[name] !== rank).map(([name]) => [name, true]));
       prevRanks.current = ranks;
       setData(rows);
@@ -84,8 +86,11 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const counts = { all: data.length, ai: data.filter((entry) => entry.kind === "ai").length, human: data.filter((entry) => entry.kind === "user").length };
-  const leader = [...data].sort((a, b) => b.bankroll - a.bankroll)[0];
+  // Hero stats reflect the default board (excludes blind AI), matching the
+  // default ALL leaderboard filter. Blind models surface via the board's tabs.
+  const boardData = data.filter((entry) => !entry.blind);
+  const counts = { all: boardData.length, ai: boardData.filter((entry) => entry.kind === "ai").length, human: boardData.filter((entry) => entry.kind === "user").length };
+  const leader = [...boardData].sort((a, b) => b.bankroll - a.bankroll)[0];
 
   function handleBet() {
     if (user) router.push("/matches");
@@ -119,7 +124,7 @@ export default function DashboardPage() {
           <Stat label="UPDATED" value={data.length ? "just now" : "waiting"} sub="next tick · 00:58" accent="live" />
         </section>
 
-        <Ticker data={data} />
+        <Ticker data={boardData} />
         <LeaderboardTable data={data} loading={loading} flashSet={flashSet} />
       </div>
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} onSuccess={() => router.push("/matches")} />

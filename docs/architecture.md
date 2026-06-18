@@ -59,8 +59,8 @@ High-level shape of the system: what talks to what, where data lives, and which 
 |---|---|---|
 | `/` | [app/page.tsx](../frontend/app/page.tsx) | Unified leaderboard (AI + users). |
 | `/matches` | [app/matches/page.tsx](../frontend/app/matches/page.tsx) | League-grouped fixture list with a "Sync Fixtures" button. |
-| `/matches/[id]` | [app/matches/[id]/page.tsx](../frontend/app/matches/[id]/page.tsx) | Server component — fetches a single fixture. Renders `UserBetForm`, AI prediction cards, lineups. |
-| `/history` | [app/history/page.tsx](../frontend/app/history/page.tsx) | Past AI predictions across all 5 models. |
+| `/matches/[id]` | [app/matches/[id]/page.tsx](../frontend/app/matches/[id]/page.tsx) | Server component fetches a single fixture, then renders `MatchDetailClient` (toggle between the 5 original and 5 blind prediction cards), `UserBetForm`, lineups. |
+| `/history` | [app/history/page.tsx](../frontend/app/history/page.tsx) | Past predictions for the original 5 models (blind rows are filtered out here; they surface on the match page and leaderboard). |
 | `/compare` | [app/compare/page.tsx](../frontend/app/compare/page.tsx) | Each of your bets side-by-side with the AI predictions for the same match. |
 
 **Key conventions**
@@ -109,7 +109,8 @@ User ────< UserBet >───── Fixture ─────< Prediction
 ```
 
 - **Fixture** keys off `external_id` (the API-Football fixture ID, as a string).
-- **Prediction** = one AI model's bet on one fixture. `model_name` ∈ {claude, gpt5, gemini, grok, deepseek}.
+- **Prediction** = one original (bookmaker-aware) AI model's bet on one fixture. `model_name` ∈ {claude, gpt5, gemini, grok, deepseek}.
+- **BlindPrediction** = the blind-mode counterpart in its own `blind_predictions` table (identical columns; `model_name` ∈ {claude_blind, …, deepseek_blind}). Kept separate so blind data can be found/deleted independently. Both tables have a unique `(fixture_id, model_name)` backstop. `prediction_class()` in the orchestrator routes an identity to its table.
 - **UserBet** = one user's bet on one fixture. Enforced unique on `(user_id, fixture_id)` via `uq_user_fixture` so users can't bet twice on the same match.
 - **User.token** is an opaque 32-byte URL-safe token, NOT a JWT. Stored in plain text in the column; sent as `Authorization: Bearer <token>`.
 - **TeamElo** is a standalone lookup table (keyed by API-Football `team_id`) holding each national team's Elo rating and FIFA world ranking (`elo` / `fifa_rank`, both nullable). Populated manually; read only for World Cup fixtures, where the orchestrator injects the values into match context. See [prediction-flow.md](prediction-flow.md#world-cup-matches-elo-fifa-ranking-and-extra-rules).
@@ -169,16 +170,16 @@ The clearest single example of how all the layers cooperate:
    d. Reject if stake > bankroll
    e. Fetch odds (cached PulseScore call)
    f. Insert UserBet row (status="pending")
-   g. If no Prediction exists for this fixture yet:
+   g. If any of the 10 model/mode combinations is missing for this fixture:
         asyncio.create_task(predict_all_in_background(...))
-        → orchestrator fans out to all 5 AI predictors in parallel
-        → each predictor saves its Prediction row when ready
+        → orchestrator fans out to the missing predictors (5 original + 5 blind) in parallel
+        → each predictor saves its Prediction row when ready (idempotent: only gaps)
    h. Return UserBetOut
 
 4. Frontend receives placed bet, optimistically updates UI
 
 5. Frontend polls /fixtures/123 every 2s (PredictionsPoller)
-   until predictions.length === 5 or 180s timeout
+   until predictions + blind_predictions === 10 or a 10-min cap
 
 6. Match kicks off, finishes.
    APScheduler tick (every 10 min):

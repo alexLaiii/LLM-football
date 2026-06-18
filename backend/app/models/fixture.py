@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.prediction import Prediction
+    from app.models.prediction_blind import BlindPrediction
     from app.models.team import Team
 
 
@@ -34,6 +35,7 @@ class Fixture(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     predictions: Mapped[List["Prediction"]] = relationship(back_populates="fixture")
+    blind_predictions: Mapped[List["BlindPrediction"]] = relationship(back_populates="fixture")
 
     @property
     def home_team_crest(self) -> str | None:

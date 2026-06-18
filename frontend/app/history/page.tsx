@@ -10,6 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default async function HistoryPage() {
+  // /predictions/ returns only the original models (blind live in a separate
+  // table and are surfaced on the match page and leaderboard), so history needs
+  // no extra filtering.
   const [predictions, fixtures] = await Promise.all([getPredictions(), getAllFixtures()]);
   const fixtureMap = Object.fromEntries(fixtures.map((fixture: Fixture) => [fixture.id, fixture])) as Record<number, Fixture>;
 

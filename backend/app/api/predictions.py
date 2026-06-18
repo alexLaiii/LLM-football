@@ -26,8 +26,7 @@ async def request_predictions(fixture_id: int, db: Session = Depends(get_db)):
     if not fixture:
         raise HTTPException(status_code=404, detail="Fixture not found")
 
-    existing = db.query(Prediction).filter(Prediction.fixture_id == fixture_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Predictions already generated for this fixture")
-
+    # Idempotent: generates only the missing model/mode combinations and returns
+    # all predictions for the fixture. A fixture with all combinations already
+    # present is returned unchanged.
     return await run_predictions(fixture, db)
