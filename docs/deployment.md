@@ -9,7 +9,7 @@ How this app gets to production and how to safely push changes.
 | Local dev | `npm run dev` on `localhost:3000` | `uvicorn` on `localhost:8000` | Postgres 16 via docker-compose, or a Neon dev branch |
 | Production v1 (Netlify-hosted) | updated to v2 on May 29 2026 | Railway | Neon |
 | Production v2 (Netlify-hosted) | updated to v3 on June 10 2026 | Railway | Neon |
-| Production v3 (Netlify-hosted) | https://llmbets.ca (Major Promping changes, optimize prompt for base on different model) | Railway | Neon |
+| Production v3 (Netlify-hosted) | (Major Promping changes, optimize prompt for base on different model) <br> updated to v3.1 on June 18 2026 | Railway | Neon |
 | Production v3.1 (Netlify-hosted) | https://llmbets.ca (Blind AI features added (model does not receive bookmaker odds for reference), neutral venue detection bug fixed, 10 minutes before kick-off odds fetching bug fixed) | Railway | Neon |
 
 There is no staging environment yet. Production is the only deployed env. If you're shipping anything bigger than a copy change, test it locally end-to-end first.
