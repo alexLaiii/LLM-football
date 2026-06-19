@@ -52,7 +52,9 @@ CONTEXT_GLOSSARY = """The context JSON may contain:
 - h2h: head-to-head record between the teams
 - home_lineup / away_lineup: starting XI if available
 - home_injuries / away_injuries: injured/suspended players
-- lineup_summary: natural-language summary of lineup strength and key absences for both teams"""
+- lineup_summary: natural-language summary of lineup strength and key absences for both teams
+- neutral_venue: true if neither team has home-crowd advantage at this venue
+- host_nation: (World Cup) the team playing in its own country, i.e. with host/home-crowd advantage; absent when neutral"""
 
 TASK_STEPS = """1. Judge the relative strength of the two teams from the match context (form, standings, lineups, injuries, rest days, H2H, home/away splits).
 2. Treat the bookmaker odds as the market's view, for reference only — form your own honest estimate rather than copying the market back.

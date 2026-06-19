@@ -30,6 +30,41 @@ _LEAGUES: dict[int, tuple[str, int]] = {
     3:   ("UEFA Europa League", 2025),
     1:   ("World Cup", 2026),
 }
+_WORLD_CUP_LEAGUE_ID = 1
+
+# National-team names vs venue-country names that don't compare equal verbatim.
+_COUNTRY_ALIASES = {
+    "united states": "usa",
+    "united states of america": "usa",
+    "us": "usa",
+    "u.s.a.": "usa",
+}
+
+
+def _norm_country(value: str) -> str:
+    v = (value or "").strip().lower()
+    return _COUNTRY_ALIASES.get(v, v)
+
+
+def _country_matches(country: str, team_name: str) -> bool:
+    """Whether a venue country and a national-team name refer to the same nation
+    (e.g. venue country 'Mexico' == team 'Mexico'). Handles USA aliases."""
+    return bool(country) and _norm_country(country) == _norm_country(team_name)
+
+
+async def _fetch_venue_country(venue_id: int) -> str | None:
+    """The country a venue is in, via API-Football /venues. World Cup only —
+    used to detect host-nation home advantage when the fixture's stadium isn't
+    the home national team's registered ground."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{_BASE_URL}/venues", headers=_HEADERS(), params={"id": venue_id})
+        data = r.json().get("response", [])
+        if data:
+            return (data[0].get("country") or "").strip() or None
+    except Exception:
+        return None
+    return None
 
 _MOCK_FIXTURES = [
     {
@@ -370,7 +405,25 @@ async def fetch_match_context(external_id: str) -> dict:
     home_team_data = _r(home_team_r)
     home_venue_id = home_team_data[0]["venue"]["id"] if home_team_data else None
     home_venue_name = (((home_team_data[0].get("venue") or {}).get("name")) or "").strip().lower() if home_team_data else ""
-    if fixture_venue_id is not None and home_venue_id is not None:
+    home_team_name = fx["teams"]["home"]["name"]
+    away_team_name = fx["teams"]["away"]["name"]
+
+    # Venue / home-advantage detection.
+    host_nation = None
+    if league_id == _WORLD_CUP_LEAGUE_ID:
+        # A national team's *registered* stadium is unreliable (often null or a
+        # single default), so the stadium-id comparison wrongly flags a host-nation
+        # home match (e.g. Mexico in Mexico) as neutral. Resolve the venue's
+        # country instead and treat the team playing in its own country as host.
+        venue_country = await _fetch_venue_country(fixture_venue_id) if fixture_venue_id else None
+        if _country_matches(venue_country or "", home_team_name):
+            host_nation = home_team_name
+        elif _country_matches(venue_country or "", away_team_name):
+            host_nation = away_team_name
+        # Home advantage (and the home/away form splits) apply only when the
+        # nominal home team is the host nation.
+        neutral_venue = host_nation != home_team_name
+    elif fixture_venue_id is not None and home_venue_id is not None:
         neutral_venue = fixture_venue_id != home_venue_id
     elif fixture_venue_name and home_venue_name:
         neutral_venue = fixture_venue_name != home_venue_name
@@ -453,6 +506,7 @@ async def fetch_match_context(external_id: str) -> dict:
         "match_round": match_round,
         "neutral_venue": neutral_venue,
         "home_last5": home_last5,
+        # host_nation added below for World Cup when a team plays in its own country.
         "away_last5": away_last5,
         "home_goals_avg_last5": home_last5["goals_for_avg"] if home_last5 else None,
         "away_goals_avg_last5": away_last5["goals_for_avg"] if away_last5 else None,
@@ -465,6 +519,8 @@ async def fetch_match_context(external_id: str) -> dict:
             if h2h else "No H2H data available."
         ),
     }
+    if host_nation:
+        result["host_nation"] = host_nation
     if not neutral_venue:
         result["home_last5_home"] = home_last5_home
         result["home_goals_avg_last5_home"] = home_last5_home["goals_for_avg"] if home_last5_home else None
