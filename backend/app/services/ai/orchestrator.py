@@ -217,23 +217,39 @@ async def predict_all_in_background(
     fixture_id: int,
     fixture_dict: dict,
     external_id: str,
+    odds_override: dict | None = None,
 ) -> None:
     """Fetch context + odds once, then run every missing model/mode in parallel.
     Idempotent: only the model/mode combinations not already stored are run, so
-    repeated triggers and partial retries never duplicate predictions."""
+    repeated triggers and partial retries never duplicate predictions.
+
+    TEMPORARY: when odds_override ({"home","draw","away"}) is given — or a manual
+    override is registered for this fixture — those odds are used instead of the
+    bookmaker feed (manual-odds testing). Remove the parameter, this branch, and
+    the manual_odds lookup to restore."""
     from app.database import SessionLocal
+    from app.services.manual_odds import get_manual_odds
     try:
-        match_context, odds, lineup_summary = await asyncio.gather(
-            fetch_match_context(external_id),
-            fetch_odds_with_live_fallback(
-                external_id,
-                home_team=fixture_dict["home_team"],
-                away_team=fixture_dict["away_team"],
-                league=fixture_dict["league"],
-                kickoff_at=fixture_dict.get("kickoff_at"),
-            ),
-            analyze_lineups(external_id),
-        )
+        if odds_override is None:
+            odds_override = get_manual_odds(external_id)
+        if odds_override is not None:
+            match_context, lineup_summary = await asyncio.gather(
+                fetch_match_context(external_id),
+                analyze_lineups(external_id),
+            )
+            odds = {**odds_override, "kickoff_at": None}
+        else:
+            match_context, odds, lineup_summary = await asyncio.gather(
+                fetch_match_context(external_id),
+                fetch_odds_with_live_fallback(
+                    external_id,
+                    home_team=fixture_dict["home_team"],
+                    away_team=fixture_dict["away_team"],
+                    league=fixture_dict["league"],
+                    kickoff_at=fixture_dict.get("kickoff_at"),
+                ),
+                analyze_lineups(external_id),
+            )
         if lineup_summary:
             match_context["lineup_summary"] = lineup_summary
 

@@ -45,6 +45,12 @@ def prediction_odds_snapshot(fixture_id: int, db: Session) -> dict | None:
 
 
 async def fixture_odds_for_betting(fixture: Fixture, db: Session) -> dict:
+    # TEMPORARY: a manual odds override takes precedence over everything.
+    from app.services.manual_odds import get_manual_odds
+    manual = get_manual_odds(fixture.external_id)
+    if manual is not None:
+        return {**manual, "kickoff_at": None, "available": True, "live": False}
+
     odds = prediction_odds_snapshot(fixture.id, db)
     if odds is None:
         odds = await fetch_odds(

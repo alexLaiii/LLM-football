@@ -2,10 +2,12 @@
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 import { type FixtureWithPredictions, type Prediction } from "@/lib/api";
 import { EXPECTED_PREDICTIONS_PER_FIXTURE, TOTAL_AI_PREDICTIONS_PER_MODE } from "@/lib/models";
 import PredictionCard from "@/components/PredictionCard";
 import PredictionsPoller from "@/components/PredictionsPoller";
+import ManualOddsPanel from "@/components/ManualOddsPanel";
 import UserBetForm from "@/components/UserBetForm";
 import TeamLogo from "@/components/TeamLogo";
 import MatchContextDebug from "@/components/MatchContextDebug";
@@ -195,8 +197,13 @@ function BlindExplainer() {
   );
 }
 
+// TEMPORARY: exact accounts allowed to use the manual-odds override (case-sensitive).
+const MANUAL_ODDS_USERS = ["Alex", "alex_real", "Kim"];
+
 export default function MatchDetailClient({ fixture }: { fixture: FixtureWithPredictions }) {
   const [blind, setBlind] = useState(false);
+  const { user } = useAuth();
+  const canManualOdds = !!user && MANUAL_ODDS_USERS.includes(user.username);
 
   // Originals and blind come from separate backend tables / response fields.
   const originalPredictions = fixture.predictions.filter((p) => p.model_name !== "sirkim");
@@ -225,6 +232,8 @@ export default function MatchDetailClient({ fixture }: { fixture: FixtureWithPre
               kickoffAt={fixture.kickoff_at}
             />
             <ConsensusStrip predictions={shown} blind={blind} />
+            {/* TEMPORARY: manual odds override — allow-listed accounts only. */}
+            {fixture.status !== "finished" && canManualOdds && <ManualOddsPanel fixtureId={fixture.id} />}
           </aside>
 
           <main className="grid min-w-0 gap-3.5">

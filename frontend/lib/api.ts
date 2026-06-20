@@ -173,6 +173,21 @@ export async function requestPredictions(fixtureId: number): Promise<Prediction[
   return res.json();
 }
 
+// TEMPORARY: manual odds override (allow-listed accounts only). Runs a
+// prediction run with the given odds in the background on the backend.
+export async function triggerManualOddsPredictions(
+  token: string,
+  fixtureId: number,
+  odds: { home: number; draw: number; away: number },
+): Promise<void> {
+  const res = await fetch(`${API_URL}/predictions/manual-odds/${fixtureId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(odds),
+  });
+  if (!res.ok) await throwApiError(res, "Manual odds prediction failed");
+}
+
 export async function getPredictions(): Promise<Prediction[]> {
   try {
     const res = await fetch(`${API_URL}/predictions/`, { cache: "no-store" });
