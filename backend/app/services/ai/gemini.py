@@ -22,7 +22,7 @@ from app.services.ai.base import (
     OUTPUT_RULES_BLIND,
 )
 
-_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
+_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent"
 
 
 def _system_prompt(role: str, task: str, rules: str) -> str:
