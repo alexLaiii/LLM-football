@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/matches",   label: "Matches",          code: "MX" },
   { href: "/history",   label: "AI History",       code: "HX" },
   { href: "/compare",   label: "Compare Me to AI", code: "CM" },
+  { href: "/changelog", label: "Changelog",        code: "CL" },
   { href: "/j-tracker", label: "J Tracker",        code: "JT" },
 ];
 
