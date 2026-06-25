@@ -3,8 +3,6 @@ GPT-5.4 predictor — Markdown prompt + OpenAI strict structured outputs.
 """
 import random
 
-from openai import AsyncOpenAI
-
 from app.services.ai.base import (
     BasePredictor,
     PredictionResult,
@@ -50,6 +48,7 @@ class GPT5Predictor(BasePredictor):
         from app.config import settings
         if settings.openai_api_key:
             try:
+                from openai import AsyncOpenAI  # lazy: keep the SDK out of RAM until a prediction runs
                 client = AsyncOpenAI(
                     api_key=settings.openai_api_key,
                 )

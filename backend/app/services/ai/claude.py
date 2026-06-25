@@ -3,8 +3,6 @@ Claude predictor — prompt formatted in Anthropic's recommended XML style.
 """
 import random
 
-import anthropic
-
 from app.services.ai.base import (
     BasePredictor,
     PredictionResult,
@@ -60,6 +58,7 @@ class ClaudePredictor(BasePredictor):
         from app.config import settings
         if settings.anthropic_api_key:
             try:
+                import anthropic  # lazy: keep the SDK out of RAM until a prediction runs
                 client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
                 # Blind mode never puts odds in the prompt; the odds-aware mode does.
                 match_data = (

@@ -3,8 +3,6 @@ DeepSeek predictor (OpenAI-compatible API).
 """
 import random
 
-from openai import AsyncOpenAI
-
 from app.services.ai.base import (
     BasePredictor,
     PredictionResult,
@@ -52,6 +50,7 @@ class DeepSeekPredictor(BasePredictor):
         from app.config import settings
         if settings.deepseek_api_key:
             try:
+                from openai import AsyncOpenAI  # lazy: keep the SDK out of RAM until a prediction runs
                 client = AsyncOpenAI(
                     api_key=settings.deepseek_api_key,
                     base_url="https://api.vectorengine.ai/v1",

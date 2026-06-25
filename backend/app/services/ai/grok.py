@@ -3,8 +3,6 @@ Grok predictor (OpenAI-compatible API via vectorengine.ai).
 """
 import random
 
-from openai import AsyncOpenAI
-
 from app.services.ai.base import (
     BasePredictor,
     PredictionResult,
@@ -52,6 +50,7 @@ class GrokPredictor(BasePredictor):
         from app.config import settings
         if settings.grok_api_key:
             try:
+                from openai import AsyncOpenAI  # lazy: keep the SDK out of RAM until a prediction runs
                 client = AsyncOpenAI(
                     api_key=settings.grok_api_key,
                     base_url="https://api.x.ai/v1",

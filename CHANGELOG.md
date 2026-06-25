@@ -11,7 +11,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Changelog page added
+### Changed
+- The leaderboard and performance endpoints no longer load every prediction/bet row into Python for computation. They now compute totals with a single SQL GROUP BY per table in Postgres (Neon).
 
+- Lazy-load the AI SDKs.
 ## [3.8] - 2026-06-20
 
 ### Added

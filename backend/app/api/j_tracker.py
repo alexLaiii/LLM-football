@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -86,6 +85,7 @@ async def _call_grok(user: str) -> str:
     if not settings.grok_api_key:
         return random.choice(fallbacks)
     try:
+        from openai import AsyncOpenAI  # lazy: keep the SDK out of RAM until used
         client = AsyncOpenAI(api_key=settings.grok_api_key, base_url="https://api.x.ai/v1")
         response = await client.chat.completions.create(
             model="grok-4.3",

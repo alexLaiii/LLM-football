@@ -25,6 +25,7 @@ from app.services.ai.orchestrator import predict_all_in_background, prediction_c
 from app.services.auth import get_current_user
 from app.services.odds_api import is_match_started
 from app.services.odds_snapshot import fixture_odds_for_betting
+from app.services.stats import grouped_stats, zero_stats
 
 router = APIRouter(prefix="/bets", tags=["bets"])
 
@@ -152,12 +153,33 @@ async def place_bet(
     return bet
 
 
-def _recent_form(settled, n: int = 5) -> list[str]:
-    """Last up to n settled results, chronological (oldest → newest), as 'W'/'L'."""
-    dated = [r for r in settled if r.settled_at is not None]
-    dated.sort(key=lambda r: r.settled_at, reverse=True)
-    recent = list(reversed(dated[:n]))
-    return ["W" if r.status == "won" else "L" for r in recent]
+def _recent_form(db: Session, Model, col, key, n: int = 5) -> list[str]:
+    """Last up to n settled results for one competitor, chronological
+    (oldest → newest) as 'W'/'L'. Fetched via a small LIMIT query so it stays
+    cheap regardless of how many bets the competitor has."""
+    rows = (
+        db.query(Model.status)
+        .filter(col == key, Model.status.in_(("won", "lost")), Model.settled_at.isnot(None))
+        .order_by(Model.settled_at.desc())
+        .limit(n)
+        .all()
+    )
+    return ["W" if status == "won" else "L" for (status,) in reversed(rows)]
+
+
+def _entry_stats(stats: dict) -> dict:
+    """Shared LeaderboardEntry numeric fields derived from aggregated stats."""
+    settled = stats["won"] + stats["lost"]
+    return {
+        "bankroll": round(INITIAL_BANKROLL + stats["settled_pl"] - stats["pending_staked"], 2),
+        "total_bets": stats["total"],
+        "won": stats["won"],
+        "lost": stats["lost"],
+        "pending": stats["pending"],
+        "win_rate": round(stats["won"] / settled, 3) if settled else 0.0,
+        "roi": round(stats["settled_pl"] / stats["settled_staked"], 3) if stats["settled_staked"] else 0.0,
+        "total_profit_loss": round(stats["settled_pl"], 2),
+    }
 
 
 # Short in-process cache so frequent polling (many tabs) doesn't recompute the
@@ -175,54 +197,32 @@ def leaderboard(db: Session = Depends(get_db)):
 
     entries: list[LeaderboardEntry] = []
 
-    # AI models — originals from `predictions`, blind from `blind_predictions`.
+    # AI models — aggregated in the DB; originals from `predictions`, blind from
+    # `blind_predictions` (one grouped query per table instead of loading rows).
+    pred_stats = grouped_stats(db, Prediction, Prediction.model_name)
+    blind_stats = grouped_stats(db, BlindPrediction, BlindPrediction.model_name)
     for model in ALL_MODELS:
         Model = prediction_class(model)
-        rows = db.query(Model).filter(Model.model_name == model).all()
-        settled = [r for r in rows if r.status in ("won", "lost")]
-        won = sum(1 for r in settled if r.status == "won")
-        lost = len(settled) - won
-        total_pl = sum(r.profit_loss or 0.0 for r in settled)
-        total_staked = sum(r.stake for r in settled)
-        pending_staked = sum(r.stake for r in rows if r.status == "pending")
+        stats = (blind_stats if is_blind(model) else pred_stats).get(model, zero_stats())
         entries.append(LeaderboardEntry(
             kind="ai",
             name=model,
             display_name=label_for(model),
             blind=is_blind(model),
-            bankroll=round(INITIAL_BANKROLL + total_pl - pending_staked, 2),
-            total_bets=len(rows),
-            won=won,
-            lost=lost,
-            pending=sum(1 for r in rows if r.status == "pending"),
-            win_rate=round(won / len(settled), 3) if settled else 0.0,
-            roi=round(total_pl / total_staked, 3) if total_staked else 0.0,
-            total_profit_loss=round(total_pl, 2),
-            recent_form=_recent_form(settled),
+            recent_form=_recent_form(db, Model, Model.model_name, model),
+            **_entry_stats(stats),
         ))
 
-    # Users
+    # Users — one grouped query over all bets, keyed by user_id.
+    user_stats = grouped_stats(db, UserBet, UserBet.user_id)
     for user in db.query(User).all():
-        rows = db.query(UserBet).filter(UserBet.user_id == user.id).all()
-        settled = [r for r in rows if r.status in ("won", "lost")]
-        won = sum(1 for r in settled if r.status == "won")
-        lost = len(settled) - won
-        total_pl = sum(r.profit_loss or 0.0 for r in settled)
-        total_staked = sum(r.stake for r in settled)
-        pending_staked = sum(r.stake for r in rows if r.status == "pending")
+        stats = user_stats.get(user.id, zero_stats())
         entries.append(LeaderboardEntry(
             kind="user",
             name=user.username,
             display_name=user.username,
-            bankroll=round(INITIAL_BANKROLL + total_pl - pending_staked, 2),
-            total_bets=len(rows),
-            won=won,
-            lost=lost,
-            pending=sum(1 for r in rows if r.status == "pending"),
-            win_rate=round(won / len(settled), 3) if settled else 0.0,
-            roi=round(total_pl / total_staked, 3) if total_staked else 0.0,
-            total_profit_loss=round(total_pl, 2),
-            recent_form=_recent_form(settled),
+            recent_form=_recent_form(db, UserBet, UserBet.user_id, user.id),
+            **_entry_stats(stats),
         ))
 
     _LB_CACHE["data"] = entries

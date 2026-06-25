@@ -14,7 +14,6 @@ import asyncio
 import json
 from datetime import datetime, timezone
 
-import anthropic
 import httpx
 
 from app.config import settings
@@ -189,6 +188,7 @@ async def analyze_lineups(external_id: str) -> str | None:
             "away_rotation": away_rotation,
         }
 
+        import anthropic  # lazy: keep the SDK out of RAM until lineup analysis runs
         anth_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         response = await anth_client.messages.create(
             model=_HAIKU_MODEL,
