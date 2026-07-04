@@ -65,8 +65,13 @@ function MatchHeaderCard({ fixture }: { fixture: FixtureWithPredictions }) {
         </div>
         <div className="px-2 text-center">
           {finished ? (
-            <span className="font-mono text-[30px] font-semibold leading-none text-white">
-              {fixture.home_goals ?? 0}<span className="mx-2 text-[var(--term-dim)]">:</span>{fixture.away_goals ?? 0}
+            <span className="flex flex-col items-center leading-none">
+              <span className="font-mono text-[30px] font-semibold text-white">
+                {fixture.home_goals ?? 0}<span className="mx-2 text-[var(--term-dim)]">:</span>{fixture.away_goals ?? 0}
+              </span>
+              <span className="mt-1.5 whitespace-nowrap font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--term-dim)]">
+                (90+ stoppage)
+              </span>
             </span>
           ) : (
             <span className="font-mono text-xl font-semibold tracking-[0.12em] text-[var(--term-amber)]">VS</span>

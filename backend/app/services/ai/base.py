@@ -36,9 +36,11 @@ When estimating true probabilities, weight factors approximately as:
 ROLE = (
     "You are a football match prediction analyst. Using the match information and the "
     "bookmaker odds as a market reference, estimate the TRUE probability of each outcome "
-    "(home win, draw, away win) as accurately and honestly as you can. A separate system "
-    "turns your probabilities into the bet, so your only job is a well-calibrated "
-    "probability estimate — do not pick a bet or compute value/expected value yourself."
+    "(home win, draw, away win) for the full-time result after 90 minutes plus stoppage "
+    "time only — extra time and penalty shootouts do NOT count — as accurately and "
+    "honestly as you can. A separate system turns your probabilities into the bet, so your "
+    "only job is a well-calibrated probability estimate — do not pick a bet or compute "
+    "value/expected value yourself."
 )
 
 CONTEXT_GLOSSARY = """The context JSON may contain:
@@ -75,9 +77,10 @@ Do NOT choose a bet, and do NOT compute value scores or expected value — that 
 ROLE_BLIND = (
     "You are a football match prediction analyst. Using only the match information "
     "provided, independently estimate the TRUE probability of each outcome (home win, "
-    "draw, away win) as accurately and honestly as you can. A separate system turns your "
-    "probabilities into a decision, so your only job is a well-calibrated probability "
-    "estimate."
+    "draw, away win) for the full-time result after 90 minutes plus stoppage time only — "
+    "extra time and penalty shootouts do NOT count — as accurately and honestly as you "
+    "can. A separate system turns your probabilities into a decision, so your only job is "
+    "a well-calibrated probability estimate."
 )
 
 TASK_STEPS_BLIND = """1. Judge the relative strength of the two teams from the match context (form, standings, lineups, injuries, rest days, H2H, home/away splits).

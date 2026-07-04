@@ -7,7 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [3.9] - 2026-06-24
+## [3.9.1] - 2026-07-04
+
+### Fixed
+- The betting result are now based on 90+ stoppage time for all matches, including knock out stage, matches the money 3 way betting logic.
+- The match scoreline display are now showing the 90+ stoppage times' result.
+
+## [3.9.0] - 2026-06-24
 
 ### Added
 - Changelog page added

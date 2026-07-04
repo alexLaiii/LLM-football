@@ -573,8 +573,16 @@ async def fetch_result(external_id: str) -> dict | None:
     fx = data[0]
     if fx["fixture"]["status"]["short"] not in ("FT", "AET", "PEN"):
         return None
-    home_goals = fx["goals"]["home"]
-    away_goals = fx["goals"]["away"]
+    # Settle on the 90-minute result (regulation + stoppage) to match the bookmaker
+    # Full Time Result 1X2 market. score.fulltime is the 90-min score; `goals` would
+    # include extra time for knockouts (AET/PEN). Fall back to `goals` only if the
+    # fulltime score is unexpectedly missing.
+    fulltime = (fx.get("score") or {}).get("fulltime") or {}
+    home_goals = fulltime.get("home")
+    away_goals = fulltime.get("away")
+    if home_goals is None or away_goals is None:
+        home_goals = fx["goals"]["home"]
+        away_goals = fx["goals"]["away"]
     if home_goals is None or away_goals is None:
         return None
     if home_goals > away_goals:
